@@ -26,11 +26,12 @@ def evaluate_model(model, train_X, train_y, valid_X, valid_y):
         y_pred_proba = model.predict_proba(train_X)[:, 1].ravel()
 
     fpr, tpr, thresholds = roc_curve(train_y, y_pred_proba)
+    youden_index = tpr + (1 - fpr) - 1
+    optimal_cutoff = thresholds[np.argmax(youden_index)]
     roc_auc_train = auc(fpr, tpr)
     _, ci_train = roc_auc_score(train_y, y_pred_proba, confidence_level=0.95)
 
-    preds_1d = y_pred_proba.flatten()
-    y_pred_proba = np.where(preds_1d > 0.5, 1, 0)
+    y_pred_proba = np.where(y_pred_proba > optimal_cutoff, 1, 0)
     cm = confusion_matrix(train_y, y_pred_proba)
 
     tn, fp, fn, tp = cm.ravel()
@@ -55,12 +56,13 @@ def evaluate_model(model, train_X, train_y, valid_X, valid_y):
         y_pred_proba = model.predict_proba(valid_X)[:, 1].ravel()
 
     fpr, tpr, thresholds = roc_curve(valid_y, y_pred_proba)
+    youden_index = tpr + (1 - fpr) - 1
+    optimal_cutoff = thresholds[np.argmax(youden_index)]
     roc_auc_valid = auc(fpr, tpr)
 
     _, ci_valid = roc_auc_score(valid_y, y_pred_proba, confidence_level=0.95)
 
-    preds_1d = y_pred_proba.flatten()
-    y_pred_proba = np.where(preds_1d > 0.5, 1, 0)
+    y_pred_proba = np.where(y_pred_proba > optimal_cutoff, 1, 0)
     cm = confusion_matrix(valid_y, y_pred_proba)
 
     tn, fp, fn, tp = cm.ravel()
