@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+{% load widget_tweaks %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OPTIMAL-AI</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Optional: Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f2f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin-top: 50px;
+            padding: 30px;
+            background-color: #ffffff;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+        .shap-plot img {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #d1e7dd;
+            border-left: 5px solid #0f5132;
+            border-radius: 5px;
+        }
+        .insights {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #fff3cd;
+            border-left: 5px solid #ffecb5;
+            border-radius: 5px;
+        }
+        .insights h4 {
+            margin-bottom: 15px;
+        }
+        .badge {
+            margin-right: 5px;
+        }
+        .section-title {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .binary-variable {
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+        .good-result {
+            background-color: #cce5ff;
+            border-left: 5px solid #004085;
+        }
+        .poor-result {
+            background-color: #f8d7da;
+            border-left: 5px solid #721c24;
+        }
+        .default-result {
+            background-color: #d1e7dd;
+            border-left: 5px solid #0f5132;
+        }
+        /* Custom Font Size Adjustments */
+        .result h4, .insights h4, .shap-plot h3 {
+            font-size: 2rem; /* Same size for section titles and SHAP Plot */
+        }
+        .result h2 {
+            font-size: 1.5rem; /* Slightly larger for Prediction Result */
+        }
+        .insights p, .result p {
+            font-size: 1.5rem; /* Larger for prediction result sentences */
+        }
+        .insights p strong, .result p strong {
+            font-size: 1.5rem; /* Larger for important parts in the sentences */
+        }
+
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 class="text-center mb-5 text-primary">OPTIMAL-BP AI</h1>
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            <div class="row">
+                <!-- Clinical Parameters Section -->
+                <div class="col-md-6">
+                    <div class="col-12 section-title">Clinical Parameters</div>
+                    <div class="row">
+                        <!-- First Column of Clinical Parameters -->
+                        <div class="col-md-6">
+                            <div class="mb-4">
+                                <label for="{{ form.Group.id_for_label }}" class="form-label">Group</label>
+                                {{ form.Group }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.pt_age.id_for_label }}" class="form-label">Age</label>
+                                <div style="width: 70%;">{{ form.pt_age }}</div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.pt_sex.id_for_label }}" class="form-label">Sex</label>
+                                {{ form.pt_sex }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.HiBP.id_for_label }}" class="form-label">Hypertension</label>
+                                {{ form.HiBP }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.Hyperlipidemia.id_for_label }}" class="form-label">Hyperlipidemia</label>
+                                {{ form.Hyperlipidemia }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.DM.id_for_label }}" class="form-label">DM</label>
+                                {{ form.DM }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.Smoking.id_for_label }}" class="form-label">Smoking</label>
+                                {{ form.Smoking }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.A_fib합친것.id_for_label }}" class="form-label">Atrial Fibrillation</label>
+                                {{ form.A_fib합친것 }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.NIHSS_IAT_just_before.id_for_label }}" class="form-label">NIHSS Score</label>
+                                <div style="width: 70%;">{{ form.NIHSS_IAT_just_before }}</div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.Onset_to_registration_min.id_for_label }}" class="form-label">Onset to Registration (minutes)</label>
+                                <div style="width: 70%;">{{ form.Onset_to_registration_min }}</div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.Hgb.id_for_label }}" class="form-label">Hemoglobin</label>
+                                <div style="width: 70%;">{{ form.Hgb }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Second Column of Clinical Parameters -->
+                        <div class="col-md-6">
+                            <div class="mb-4">
+                                <label for="{{ form.CHF_onoff.id_for_label }}" class="form-label">Congestive Heart Failure</label>
+                                {{ form.CHF_onoff }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.CAOD합친것.id_for_label }}" class="form-label">CAOD</label>
+                                {{ form.CAOD합친것 }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.PAOD_existence.id_for_label }}" class="form-label">PAOD</label>
+                                {{ form.PAOD_existence }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.Previous_stroke_existence.id_for_label }}" class="form-label">Previous Stroke</label>
+                                {{ form.Previous_stroke_existence }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.cancer_active.id_for_label }}" class="form-label">Active Cancer</label>
+                                {{ form.cancer_active }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.IV_tPA.id_for_label }}" class="form-label">IV tPA</label>
+                                {{ form.IV_tPA }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.Antiplatelet.id_for_label }}" class="form-label">Antiplatelet</label>
+                                {{ form.Antiplatelet }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.Anticoagulant.id_for_label }}" class="form-label">Anticoagulant</label>
+                                {{ form.Anticoagulant }}
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.WBC.id_for_label }}" class="form-label">White Blood Cell Count</label>
+                                <div style="width: 70%;">{{ form.WBC }}</div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="{{ form.BMI.id_for_label }}" class="form-label">Body Mass Index</label>
+                                <div style="width: 70%;">{{ form.BMI }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BP Parameters Section -->
+                <div class="col-md-6">
+                    <div class="col-12 section-title">SBP Parameters</div>
+                    <div class="mb-4">
+                        <label for="{{ form.Systolic_enroll.id_for_label }}" class="form-label">SBP Enroll</label>
+                        {{ form.Systolic_enroll }}
+                    </div>
+                    <div class="mb-4">
+                        <label for="{{ form.systolic_max.id_for_label }}" class="form-label">SBP Max</label>
+                        {{ form.systolic_max }}
+                    </div>
+                    <div class="mb-4">
+                        <label for="{{ form.systolic_min.id_for_label }}" class="form-label">SBP Min</label>
+                        {{ form.systolic_min }}
+                    </div>
+                    <div class="mb-4">
+                        <label for="{{ form.systolic_mean.id_for_label }}" class="form-label">SBP Mean</label>
+                        {{ form.systolic_mean }}
+                    </div>
+                    <div class="mb-4">
+                        <label for="{{ form.systolic_TR.id_for_label }}" class="form-label">SBP Time Rate</label>
+                        {{ form.systolic_TR }}
+                    </div>
+                    <div class="mb-4">
+                        <label for="{{ form.systolic_SD.id_for_label }}" class="form-label">SBP Standard Deviation</label>
+                        {{ form.systolic_SD }}
+                    </div>
+                    <div class="mb-4">
+                        <label for="{{ form.systolic_CV.id_for_label }}" class="form-label">SBP Coefficient of Variation</label>
+                        {{ form.systolic_CV }}
+                    </div>
+                    <div class="mb-4">
+                        <label for="{{ form.systolic_VIM.id_for_label }}" class="form-label">SBP Variation Independent of the Mean</label>
+                        {{ form.systolic_VIM }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2 mt-4">
+                <button type="submit" class="btn btn-success btn-lg">Submit</button>
+            </div>
+        </form>
+
+        {% if result %}
+            <div class="result {% if result == "0." %}good-result{% elif result == "1." %}poor-result{% else %}default-result{% endif %}">
+                <h4>Prediction Result</h4>
+                {% if result == "0." %}
+                    <p>The predicted 3-month mRS is <strong>≤ 2 with a probability of <span id="calculated_prob"></span>%</strong>.</p>
+
+                    <script>
+                        var result_prob = parseInt("{{ result_prob }}", 10);
+                        var calculated_prob = 100 - result_prob;
+                        document.getElementById("calculated_prob").textContent = calculated_prob;
+                    </script>
+
+                {% elif result == "1." %}
+                    <p>The predicted 3-month mRS is <strong>≥ 3 with a probability of {{ result_prob }}%</strong>.</p>
+                {% else %}
+                    <p>The predicted 3-month mRS is <strong>{{ result }}</strong>.</p>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {% if insights %}
+            <div class="insights">
+                <h4>Key Factors Impacting mRS Score</h4>
+                <p>The factor that had the greatest negative impact on your mRS score was
+                    <span class="badge bg-danger">{{ insights.worst_factor }}</span>.
+                </p>
+                <p>The factor that had the greatest positive impact on your mRS score was
+                    <span class="badge bg-success">{{ insights.best_factor }}</span>.
+                </p>
+            </div>
+        {% endif %}
+
+        {% if shap_plot %}
+            <div class="shap-plot mt-5">
+                <h3 class="mb-3">SHAP Force Plot</h3>
+                <img src="data:image/png;base64,{{ shap_plot }}" alt="SHAP Plot" class="img-fluid">
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
