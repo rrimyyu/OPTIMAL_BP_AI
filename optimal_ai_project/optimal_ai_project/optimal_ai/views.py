@@ -28,8 +28,8 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 # Load Scaler Objects
-scalers_cs = joblib.load("C:/Users/ORI1/Documents/GitHub/Optimal_BP/Optimal_BP/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_cs.pkl")
-scalers_is = joblib.load("C:/Users/ORI1/Documents/GitHub/Optimal_BP/Optimal_BP/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_is.pkl")
+scalers_cs = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_cs.pkl")
+scalers_is = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_is.pkl")
 
 def prepare_input_features(collected_data):
     group = collected_data.get("Group")
@@ -70,7 +70,7 @@ def optimal_ai_view(request):
             scaled_features = scaled_features[new_columns]
             input_features = scaled_features.to_numpy().reshape(1, -1)
 
-            model = tf.keras.models.load_model("C:/Users/ORI1/Documents/GitHub/Optimal_BP/Optimal_BP/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/cln_sbp_model.h5")
+            model = tf.keras.models.load_model("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/cln_sbp_model.h5")
             prediction = model.predict(input_features)
             result_prob = int(round(prediction[0][0] * 100, 2))
 
