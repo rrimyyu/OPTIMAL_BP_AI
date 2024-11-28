@@ -86,12 +86,12 @@ def optimal_ai_view(request):
             shap_values_with_cols = shap_values_with_cols.transpose()
             shap_values_with_cols.columns = new_columns
 
-            feature_names = ['Age', 'Sex', 'Hypertension', 'Hyperlipidemia', 'Smoking', 'Previous Stroke',
-                             'CAOD', 'Active Cancer', 'Congestive Heart Failure', 'PAOD', 'NIHSS Score',
-                             'Onset to Registration', 'IV tPA', 'SBP Enroll', 'DM', 'Atrial Fibrillation',
-                             'Antiplatelet', 'Anticoagulant', 'Hemoglobin', 'White Blood Cell', 'Body Mass Index',
-                             'Group', 'SBP Max', 'SBP Min', 'SBP Mean', 'SBP Time Rate', 'SBP Standard Deviation',
-                             'SBP Coefficient of Variation', 'SBP Variation Independent of the Mean']
+            feature_names = ['Age', 'Sex', 'Hypertension', 'Hyperlipidemia', 'Smoking', 'Previous stroke',
+                             'CAOD', 'Active cancer', 'Congestive heart failure', 'PAOD', 'NIHSS score',
+                             'Onset to registration', 'IV tPA', 'SBP enroll', 'DM', 'Atrial fibrillation',
+                             'Antiplatelet', 'Anticoagulant', 'Hemoglobin', 'White blood cell', 'Body mass index',
+                             'Group', 'SBP max', 'SBP min', 'SBP mean', 'SBP time rate', 'SBP standard deviation',
+                             'SBP coefficient of variation', 'SBP variation independent of the mean']
 
             insights = extract_shap_insights(np.transpose(shap_values), feature_names, top_n=3)
 

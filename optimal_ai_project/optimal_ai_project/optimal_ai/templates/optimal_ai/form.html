@@ -239,7 +239,7 @@
             <div class="result {% if result == "0." %}good-result{% elif result == "1." %}poor-result{% else %}default-result{% endif %}">
                 <h4>Prediction Result</h4>
                 {% if result == "0." %}
-                    <p>The predicted 3-month mRS is <strong>≤ 2 with a probability of <span id="calculated_prob"></span>%</strong>.</p>
+                    <p>Predicted 3-month mRS is <strong>≤ 2 with a probability of <span id="calculated_prob"></span>%</strong>.</p>
 
                     <script>
                         var result_prob = parseInt("{{ result_prob }}", 10);
@@ -248,9 +248,9 @@
                     </script>
 
                 {% elif result == "1." %}
-                    <p>The predicted 3-month mRS is <strong>≥ 3 with a probability of {{ result_prob }}%</strong>.</p>
+                    <p>Predicted 3-month mRS is <strong>≥ 3 with a probability of {{ result_prob }}%</strong>.</p>
                 {% else %}
-                    <p>The predicted 3-month mRS is <strong>{{ result }}</strong>.</p>
+                    <p>Predicted 3-month mRS is <strong>{{ result }}</strong>.</p>
                 {% endif %}
             </div>
         {% endif %}
@@ -258,10 +258,10 @@
         {% if insights %}
             <div class="insights">
                 <h4>Key Factors Impacting mRS Score</h4>
-                <p>The factor that had the greatest negative impact on your mRS score was
+                <p>The greatest negative factor impacting the mRS score was
                     <span class="badge bg-danger">{{ insights.worst_factor }}</span>.
                 </p>
-                <p>The factor that had the greatest positive impact on your mRS score was
+                <p>The greatest positive factor impacting the mRS score was
                     <span class="badge bg-success">{{ insights.best_factor }}</span>.
                 </p>
             </div>
