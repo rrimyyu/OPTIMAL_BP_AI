@@ -79,9 +79,7 @@ def optimal_ai_view(request):
 
             result = f"{int(prediction[0][0])}."
 
-            # explainer = find_explainer(model=model)
-            with open("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/explainer.pkl", "rb") as f:
-                explainer = pickle.load(f)
+            explainer = find_explainer(model=model)
             shap_values = explainer.shap_values(input_features)
             shap_values = np.squeeze(shap_values)
             shap_values_with_cols = pd.DataFrame(shap_values)
