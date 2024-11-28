@@ -21,8 +21,7 @@ def find_explainer(model):
 
     model_bp = model
 
-    with open("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/summary_data.pkl", "rb") as f:
-        summary_data = pickle.load(f)
+    summary_data = np.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/summary_data.npy")
 
     # explainer = shap.DeepExplainer(model_bp, np.array(x_df))
     explainer = shap.DeepExplainer(model_bp, np.array(summary_data))
