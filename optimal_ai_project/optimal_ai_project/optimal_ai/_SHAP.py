@@ -1,5 +1,6 @@
 import numpy as np
 import shap
+import pickle
 
 from ._data_preprocessing import load_data, data_preprocessing
 
