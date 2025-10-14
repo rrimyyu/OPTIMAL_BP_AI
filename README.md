@@ -10,10 +10,10 @@ The project investigates how different systolic blood pressure (SBP) control str
 ```mermaid
 graph TD
 A[Clinical & SBP Excel Sheets] --> B[Data Preprocessing]
-B --> C[Feature Engineering<br/>(TR, SD, CV, VIM)]
-C --> D[Model Training<br/>(DNN, XGBoost, LightGBM, CatBoost)]
-D --> E[Explainability<br/>(SHAP, Feature Importance)]
-E --> F[Group Comparison<br/>(Intensive vs Conventional)]
+B --> C[Feature Engineering: TR, SD, CV, VIM]
+C --> D[Model Training: DNN, XGBoost, LightGBM, CatBoost]
+D --> E[Explainability: SHAP, Feature Importance]
+E --> F[Group Comparison: Intensive vs Conventional]
 ```
 
 ---
@@ -89,15 +89,16 @@ All generated reports and model files are stored in `results/reports/` and `resu
 
 ### 🧰 Dependencies
 ```bash
-Python >= 3.9
+Python >= 3.8
 pandas >= 2.0
-numpy >= 1.24
+numpy >= 1.23
 scikit-learn >= 1.3
-tensorflow >= 2.12
+tensorflow >= 2.3
 lightgbm >= 4.0
+xgboost >= 2.0
 catboost >= 1.2
 shap >= 0.44
-matplotlib, seaborn, joblib
+matplotlib, seaborn, joblib, openpyxl
 ```
 
 Install all dependencies:
