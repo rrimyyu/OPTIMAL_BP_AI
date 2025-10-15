@@ -1,4 +1,4 @@
-# 🧠 OPTIMAL-BP AI: Explainable AI for Blood Pressure Variability after Thrombectomy
+# 🧠 OPTIMAL-BP AI: Prediction of 3-Month Functional Outcomes Using SBP Metrics and Explainable AI
 
 ### 📖 Overview
 This repository contains the core scripts and workflow for the secondary analysis of the **OPTIMAL-BP randomized clinical trial (2020–2022, 19 centers, N = 306)**.  
