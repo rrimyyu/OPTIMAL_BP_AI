@@ -10,9 +10,9 @@ The project investigates how different systolic blood pressure (SBP) control str
 ```mermaid
 graph TD
 A[Clinical & SBP Excel Sheets] --> B[Data Preprocessing]
-B --> C[Feature Engineering: TR, SD, CV, VIM]
-C --> D[Model Training: DNN, XGBoost, LightGBM, CatBoost]
-D --> E[Explainability: SHAP, Feature Importance]
+B --> C[Feature Engineering]
+C --> D[Model Training]
+D --> E[Explainability]
 E --> F[Group Comparison: Intensive vs Conventional]
 ```
 
@@ -39,7 +39,7 @@ E --> F[Group Comparison: Intensive vs Conventional]
 **Outcome:** 90-day mRS (0–2 = Good / 3–6 = Poor)  
 
 **SBP inputs used:**  
-`Systolic_enroll`, `systolic_overall_max`, `systolic_overall_min`, `systolic_overall_mean`  
+`SBP at enrollment`, `SBP overall maximum`, `SBP overall minimum`, `SBP overall mean`  
 
 **BPV features:**  
 - `TR` (Time-Rate of SBP change)  
@@ -53,7 +53,7 @@ E --> F[Group Comparison: Intensive vs Conventional]
 | Step | Method |
 |:--|:--|
 | **Feature scaling** | StandardScaler per group (Intensive / Conventional) |
-| **Models** | DNN, XGBoost, LightGBM, CatBoost |
+| **Models** | DNN, Decision trees, Extra tree, Random forest, XGBoost, LightGBM, CatBoost |
 | **Loss / Metrics** | Binary cross-entropy, AUC-ROC, AUC-PR, Accuracy, Precision, Recall |
 | **Explainability** | SHAP-based feature importance and dependence analysis |
 
