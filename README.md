@@ -26,7 +26,7 @@ E --> F[Group Comparison: Intensive vs Conventional]
 | **`tuning_models.py`** | Hyperparameter search using randomized grid or Bayesian optimization. |
 | **`run_train.py`** | Main training routine (model training, validation, and saving). |
 | **`run_train_call.py`** | Entry script for local execution (Python script or notebook). |
-| **`model_evaluation.py`** | Evaluate models with ROC, PR curves, and classification metrics. |
+| **`model_evaluation.py`** | Evaluate models with ROC curves and classification metrics. |
 | **`compare_auc_delong.py`** | Statistical comparison of AUCs using DeLong’s test. |
 | **`shap_analysis.py`** | Compute SHAP values for explainability and visualize feature importance. |
 | **`run_tune.py`** | Run hyperparameter tuning and save optimal configurations. |
@@ -54,7 +54,7 @@ E --> F[Group Comparison: Intensive vs Conventional]
 |:--|:--|
 | **Feature scaling** | StandardScaler per group (Intensive / Conventional) |
 | **Models** | DNN, Decision trees, Extra tree, Random forest, XGBoost, LightGBM, CatBoost |
-| **Loss / Metrics** | Binary cross-entropy, AUC-ROC, AUC-PR, Accuracy, Precision, Recall |
+| **Loss / Metrics** | Binary cross-entropy, AUC-ROC, Accuracy, Precision, Recall |
 | **Explainability** | SHAP-based feature importance and dependence analysis |
 
 ---
