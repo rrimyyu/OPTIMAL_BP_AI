@@ -81,9 +81,9 @@ OPTIMAL_BP_AI/
 ```
 
 *Note:*  
-The `figures/` and `results/` directories are **not uploaded to GitHub**,  
-but are automatically created when you run the training script.  
-All generated reports and model files are stored in `results/reports/` and `results/models/`.
+The `data/` and `results/` directories are **not included in the GitHub repository**.
+However, the `results/` directory is automatically created when you run the training script.
+All generated reports and model files will be saved under `results/reports/` and `results/models/`, respectively.
 
 ---
 
