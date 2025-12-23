@@ -37,33 +37,68 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 scalers_cs = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_cs.pkl")
 scalers_is = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_is.pkl")
 
-def prepare_input_features(collected_data, keep_cols=None):
-    group = int(float(collected_data.get("Group")))
+# def prepare_input_features(collected_data, keep_cols=None):
+#     group = int(float(collected_data.get("Group")))
+#
+#     if group == 0.0:
+#         scaler = scalers_cs
+#         if scaler is None:
+#             raise ValueError("Scaler for group 0 not found")
+#     elif group == 1.0:
+#         scaler = scalers_is
+#         if scaler is None:
+#             raise ValueError("Scaler for group 1 not found")
+#     else:
+#         raise ValueError("Invalid group value")
+#
+#     df = pd.DataFrame([collected_data])
+#
+#     for cols, scaler_instance in scaler.items():
+#         cols_list = list(cols)
+#         df[cols_list] = scaler_instance.transform(df[cols_list])
+#
+#     if keep_cols is not None:
+#         missing = [c for c in keep_cols if c not in df.columns]
+#         if missing:
+#             raise KeyError(f"Missing columns in input data: {missing}")
+#         df = df[keep_cols]
+#
+#     return df
+
+def prepare_input_features(collected_data, keep_cols):
+    group = collected_data.get("Group")
 
     if group == 0.0:
-        scaler = scalers_cs
-        if scaler is None:
-            raise ValueError("Scaler for group 0 not found")
+        scaler_dict = scalers_cs
     elif group == 1.0:
-        scaler = scalers_is
-        if scaler is None:
-            raise ValueError("Scaler for group 1 not found")
+        scaler_dict = scalers_is
     else:
         raise ValueError("Invalid group value")
 
     df = pd.DataFrame([collected_data])
 
-    for cols, scaler_instance in scaler.items():
+    # ✅ scaler가 가진 컬럼 그룹 중, df에 존재하는 것만 transform
+    for cols, scaler_instance in scaler_dict.items():
         cols_list = list(cols)
+        existing = [c for c in cols_list if c in df.columns]
+
+        # 아무것도 없으면 스킵
+        if not existing:
+            continue
+
+        # 그룹의 일부만 존재하면 위험하니(스케일러 fit 차원 불일치) "그 그룹 전체가 있을 때만" 변환
+        if len(existing) != len(cols_list):
+            # 부분 컬럼만 있으면 transform 차원이 안 맞아서 오류 → 스킵
+            continue
+
         df[cols_list] = scaler_instance.transform(df[cols_list])
 
-    if keep_cols is not None:
-        missing = [c for c in keep_cols if c not in df.columns]
-        if missing:
-            raise KeyError(f"Missing columns in input data: {missing}")
-        df = df[keep_cols]
+    # ✅ 최종적으로 우리가 쓰는 10개만 남김
+    missing = [c for c in keep_cols if c not in df.columns]
+    if missing:
+        raise KeyError(f"Missing columns in input data: {missing}")
 
-    return df
+    return df[keep_cols]
 
 def optimal_ai_view(request):
     result = None
