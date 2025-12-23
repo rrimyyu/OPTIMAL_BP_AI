@@ -40,9 +40,9 @@ scalers_is = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optima
 def prepare_input_features(collected_data, keep_cols):
     group = collected_data.get("Group")
     if group == 0.0:
-        scaler = scaler_cs
+        scaler = scalers_cs
     elif group == 1.0:
-        scaler = scaler_is
+        scaler = scalers_is
     else:
         raise ValueError("Invalid group value")
 
