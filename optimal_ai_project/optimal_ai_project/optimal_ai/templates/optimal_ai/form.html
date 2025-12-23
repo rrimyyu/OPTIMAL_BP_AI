@@ -300,6 +300,37 @@
     .pill { border-radius:999px; }
     .form-control, .form-select { border-radius:12px; }
     .btn-lg { border-radius:14px; }
+
+    /* ✅ Segmented radio buttons (clickable Yes/No pills) */
+    .segmented {
+      display: inline-flex;
+      gap: .5rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .segmented input[type="radio"]{
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .segmented label{
+      cursor: pointer;
+      padding: .55rem 1.1rem;
+      border: 1px solid #ced4da;
+      border-radius: 999px;
+      background: #fff;
+      user-select: none;
+      transition: all .12s ease-in-out;
+    }
+    .segmented input[type="radio"]:checked + label{
+      background: #0d6efd;
+      color: #fff;
+      border-color: #0d6efd;
+      box-shadow: 0 6px 14px rgba(13,110,253,.15);
+    }
+    .segmented label:hover{
+      border-color: #0d6efd;
+    }
   </style>
 </head>
 
@@ -328,8 +359,12 @@
           <div class="row g-3">
             <div class="col-md-6">
               <label for="{{ form.Group.id_for_label }}" class="form-label required">Group</label>
+
+              <!-- Group은 현재 선택형(select 또는 radio)일 수 있어 그대로 렌더 -->
+              {# 만약 Group도 radio로 쓰고 싶으면 아래 segmented 패턴으로 바꾸면 됩니다 #}
               {% render_field form.Group class="form-select" %}
-              <div class="hint mt-1">Select the cohort (e.g., CS vs IS) used by the model.</div>
+
+              <div class="hint mt-1">Select the cohort used by the model.</div>
             </div>
 
             <div class="col-md-6">
@@ -345,36 +380,62 @@
 
         <hr class="my-4">
 
-        <!-- 2) Clinical history (binary toggles / selects) -->
+        <!-- 2) Clinical history (✅ clickable binary radios) -->
         <div class="mb-4">
           <h5 class="mb-2"><i class="bi bi-clipboard2-pulse me-2"></i>Clinical history</h5>
           <div class="row g-3">
+
+            <!-- Hyperlipidemia -->
             <div class="col-md-6">
-              <label for="{{ form.Hyperlipidemia.id_for_label }}" class="form-label required">Hyperlipidemia</label>
-              {% render_field form.Hyperlipidemia class="form-select" %}
+              <label class="form-label required">Hyperlipidemia</label>
+              <div class="segmented">
+                {% for radio in form.Hyperlipidemia %}
+                  {{ radio.tag }}
+                  <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                {% endfor %}
+              </div>
             </div>
 
+            <!-- DM -->
             <div class="col-md-6">
-              <label for="{{ form.DM.id_for_label }}" class="form-label required">Diabetes mellitus (DM)</label>
-              {% render_field form.DM class="form-select" %}
+              <label class="form-label required">Diabetes mellitus (DM)</label>
+              <div class="segmented">
+                {% for radio in form.DM %}
+                  {{ radio.tag }}
+                  <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                {% endfor %}
+              </div>
             </div>
 
+            <!-- Previous stroke -->
             <div class="col-md-6">
-              <label for="{{ form.Previous_stroke_existence.id_for_label }}" class="form-label required">Previous stroke</label>
-              {% render_field form.Previous_stroke_existence class="form-select" %}
+              <label class="form-label required">Previous stroke</label>
+              <div class="segmented">
+                {% for radio in form.Previous_stroke_existence %}
+                  {{ radio.tag }}
+                  <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                {% endfor %}
+              </div>
             </div>
 
+            <!-- Anticoagulant -->
             <div class="col-md-6">
-              <label for="{{ form.Anticoagulant.id_for_label }}" class="form-label required">Anticoagulant use</label>
-              {% render_field form.Anticoagulant class="form-select" %}
+              <label class="form-label required">Anticoagulant use</label>
+              <div class="segmented">
+                {% for radio in form.Anticoagulant %}
+                  {{ radio.tag }}
+                  <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                {% endfor %}
+              </div>
               <div class="hint mt-1">Current anticoagulant medication (Yes/No).</div>
             </div>
+
           </div>
         </div>
 
         <hr class="my-4">
 
-        <!-- 3) NIHSS -->
+        <!-- 3) NIHSS + Hgb -->
         <div class="mb-4">
           <h5 class="mb-2"><i class="bi bi-activity me-2"></i>Stroke severity</h5>
           <div class="row g-3">
