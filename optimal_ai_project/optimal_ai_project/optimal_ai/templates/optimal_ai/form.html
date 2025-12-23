@@ -32,19 +32,48 @@
 {#    .field-block { margin-bottom: 1rem; }#}
 {#    .field-block .segmented { margin-top: .35rem; }#}
 {##}
-{#    /* Results panels (previous UI style) */#}
-{#    .result { margin-top: 24px; padding: 18px; border-radius: 12px; }#}
+{#    /* Result “tone” panels */#}
+{#    .result { padding: 18px; border-radius: 12px; }#}
 {#    .good-result { background-color: #cce5ff; border-left: 6px solid #004085; }#}
 {#    .poor-result { background-color: #f8d7da; border-left: 6px solid #721c24; }#}
 {#    .default-result { background-color: #d1e7dd; border-left: 6px solid #0f5132; }#}
 {##}
-{#    .insights { margin-top: 16px; padding: 18px; background:#fff3cd; border-left:6px solid #ffecb5; border-radius:12px; }#}
+{#    /* Result cards */#}
+{#    .result-grid { margin-top: 22px; display:grid; gap: 14px; }#}
+{#    @media (min-width: 992px){#}
+{#      .result-grid { grid-template-columns: 1fr 1fr; align-items: start; }#}
+{#      .result-grid .span-2 { grid-column: 1 / -1; }#}
+{#    }#}
+{#    .result-card {#}
+{#      background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:16px;#}
+{#      box-shadow:0 8px 20px rgba(0,0,0,.06); overflow:hidden;#}
+{#    }#}
+{#    .result-card .rc-head{#}
+{#      padding:14px 16px;#}
+{#      background: linear-gradient(135deg, rgba(13,110,253,.10), rgba(32,201,151,.10));#}
+{#      border-bottom:1px solid rgba(0,0,0,.05);#}
+{#      display:flex; align-items:center; justify-content:space-between; gap:10px;#}
+{#    }#}
+{#    .result-card .rc-body{ padding: 16px; }#}
+{#    .rc-title{ font-weight:700; margin:0; display:flex; align-items:center; gap:8px; }#}
+{#    .rc-sub{ margin:0; color:#6c757d; font-size:.9rem; }#}
+{#    .badge-soft {#}
+{#      background: rgba(13,110,253,.10);#}
+{#      color:#0d6efd;#}
+{#      border: 1px solid rgba(13,110,253,.18);#}
+{#    }#}
+{#    .badge-soft-danger {#}
+{#      background: rgba(220,53,69,.10);#}
+{#      color:#dc3545;#}
+{#      border: 1px solid rgba(220,53,69,.18);#}
+{#    }#}
+{#    .badge-soft-success {#}
+{#      background: rgba(25,135,84,.10);#}
+{#      color:#198754;#}
+{#      border: 1px solid rgba(25,135,84,.18);#}
+{#    }#}
 {##}
 {#    .shap-plot img { width:100%; height:auto; border-radius:12px; box-shadow:0 6px 14px rgba(0,0,0,.10); }#}
-{##}
-{#    /* Debug panel */#}
-{#    .debug { margin-top:16px; }#}
-{#    .debug pre { white-space: pre-wrap; word-break: break-word; }#}
 {#  </style>#}
 {#</head>#}
 {##}
@@ -222,9 +251,7 @@
 {#        </div>#}
 {#      </form>#}
 {##}
-{#      <!-- =======================#}
-{#           ✅ (A) FORM ERRORS#}
-{#           ======================= -->#}
+{#      <!-- FORM ERRORS -->#}
 {#      {% if form.errors %}#}
 {#        <div class="alert alert-danger mt-4">#}
 {#          <h6 class="mb-2"><i class="bi bi-exclamation-triangle me-2"></i>Form validation errors</h6>#}
@@ -233,105 +260,124 @@
 {#        </div>#}
 {#      {% endif %}#}
 {##}
-{#      <!-- =======================#}
-{#           ✅ (B) PREDICTION RESULT (previous behavior)#}
-{#           ======================= -->#}
+{#      <!-- =========================================================#}
+{#           ✅ RESULTS (same content, but styled with current UI theme)#}
+{#           ========================================================= -->#}
 {#      {% if result %}#}
-{#        <div class="result {% if result == "0." %}good-result{% elif result == "1." %}poor-result{% else %}default-result{% endif %}">#}
-{#          <h4 class="mb-2">Prediction Result</h4>#}
+{#        <div class="result-grid">#}
 {##}
-{#          {% if result == "0." %}#}
-{#            <p class="mb-0">#}
-{#              Predicted 3-month mRS is <strong>≤ 2 with a probability of <span id="calculated_prob"></span>%</strong>.#}
-{#            </p>#}
-{#            <script>#}
-{#              var result_prob = parseInt("{{ result_prob }}", 10);#}
-{#              var calculated_prob = 100 - result_prob;#}
-{#              document.getElementById("calculated_prob").textContent = calculated_prob;#}
-{#            </script>#}
+{#          <!-- (1) Prediction Result -->#}
+{#          <div class="result-card">#}
+{#            <div class="rc-head">#}
+{#              <p class="rc-title"><i class="bi bi-graph-up-arrow"></i>Prediction Result</p>#}
+{#              {% if result == "1." %}#}
+{#                <span class="badge badge-soft-danger pill"><i class="bi bi-exclamation-circle me-1"></i>Poor outcome</span>#}
+{#              {% elif result == "0." %}#}
+{#                <span class="badge badge-soft pill"><i class="bi bi-check-circle me-1"></i>Good outcome</span>#}
+{#              {% else %}#}
+{#                <span class="badge bg-light text-dark pill">Result</span>#}
+{#              {% endif %}#}
+{#            </div>#}
 {##}
-{#          {% elif result == "1." %}#}
-{#            <p class="mb-0">#}
-{#              Predicted 3-month mRS is <strong>≥ 3 with a probability of {{ result_prob }}%</strong>.#}
-{#            </p>#}
-{#          {% else %}#}
-{#            <p class="mb-0">#}
-{#              Predicted 3-month mRS is <strong>{{ result }}</strong>.#}
-{#            </p>#}
-{#          {% endif %}#}
-{#        </div>#}
-{#      {% endif %}#}
+{#            <div class="rc-body">#}
+{#              <div class="result {% if result == "0." %}good-result{% elif result == "1." %}poor-result{% else %}default-result{% endif %}">#}
+{#                {% if result == "0." %}#}
+{#                  <p class="mb-0">#}
+{#                    Predicted 3-month mRS is <strong>≤ 2</strong>#}
+{#                    with a probability of#}
+{#                    <span class="badge bg-primary pill ms-1"><span id="calculated_prob"></span>%</span>.#}
+{#                  </p>#}
+{#                  <script>#}
+{#                    var result_prob = parseInt("{{ result_prob }}", 10);#}
+{#                    var calculated_prob = 100 - result_prob;#}
+{#                    document.getElementById("calculated_prob").textContent = calculated_prob;#}
+{#                  </script>#}
 {##}
-{#      <!-- =======================#}
-{#           ✅ (C) INSIGHTS (previous behavior)#}
-{#           ======================= -->#}
-{#      {% if insights %}#}
-{#        <div class="insights">#}
-{#          <h4 class="mb-3">Key Factors Impacting mRS Score</h4>#}
-{#          <p class="mb-2">#}
-{#            The greatest negative factor impacting the mRS score was#}
-{#            <span class="badge bg-danger">{{ insights.worst_factor }}</span>.#}
-{#          </p>#}
-{#          <p class="mb-0">#}
-{#            The greatest positive factor impacting the mRS score was#}
-{#            <span class="badge bg-success">{{ insights.best_factor }}</span>.#}
-{#          </p>#}
-{#        </div>#}
-{#      {% endif %}#}
+{#                {% elif result == "1." %}#}
+{#                  <p class="mb-0">#}
+{#                    Predicted 3-month mRS is <strong>≥ 3</strong>#}
+{#                    with a probability of#}
+{#                    <span class="badge bg-danger pill ms-1">{{ result_prob }}%</span>.#}
+{#                  </p>#}
 {##}
-{#      <!-- =======================#}
-{#           ✅ (D) SHAP PLOT (previous behavior)#}
-{#           ======================= -->#}
-{#      {% if shap_plot %}#}
-{#        <div class="shap-plot mt-4">#}
-{#          <h3 class="mb-3">SHAP Plot</h3>#}
-{#          <img src="data:image/png;base64,{{ shap_plot }}" alt="SHAP Plot" class="img-fluid">#}
-{#        </div>#}
-{#      {% else %}#}
-        {# SHAP가 안 나올 때 원인 파악 도움 #}
-{#        {% if request.method == "POST" and result %}#}
-{#          <div class="alert alert-secondary mt-4">#}
-{#            <strong>SHAP plot is empty.</strong>#}
-{#            <div class="hint mt-2">#}
-{#              This usually means: (1) SHAP failed in the view, (2) shap_plot variable not set,#}
-{#              or (3) exception occurred before encoding the image.#}
-{#              Check the debug panel below / server logs.#}
+{#                {% else %}#}
+{#                  <p class="mb-0">#}
+{#                    Predicted 3-month mRS is <strong>{{ result }}</strong>.#}
+{#                  </p>#}
+{#                {% endif %}#}
+{#              </div>#}
+{##}
+{#              <p class="rc-sub mt-2">#}
+{#                <i class="bi bi-info-circle me-1"></i>For research use only.#}
+{#              </p>#}
 {#            </div>#}
 {#          </div>#}
-{#        {% endif %}#}
+{##}
+{#          <!-- (2) Key Factors Impacting mRS Score -->#}
+{#          <div class="result-card">#}
+{#            <div class="rc-head">#}
+{#              <p class="rc-title"><i class="bi bi-lightbulb"></i>Key Factors Impacting mRS Score</p>#}
+{#              <span class="badge badge-soft pill"><i class="bi bi-stars me-1"></i>Local explanation</span>#}
+{#            </div>#}
+{##}
+{#            <div class="rc-body">#}
+{#              {% if insights %}#}
+{#                <div class="insights">#}
+{#                  <p class="mb-2">#}
+{#                    The greatest negative factor impacting the mRS score was#}
+{#                    <span class="badge bg-danger pill">{{ insights.worst_factor }}</span>.#}
+{#                  </p>#}
+{#                  <p class="mb-0">#}
+{#                    The greatest positive factor impacting the mRS score was#}
+{#                    <span class="badge bg-success pill">{{ insights.best_factor }}</span>.#}
+{#                  </p>#}
+{#                </div>#}
+{#                <div class="hint mt-2">#}
+{#                  These are model-based attributions (non-causal).#}
+{#                </div>#}
+{#              {% else %}#}
+{#                <div class="alert alert-light border rounded-4 mb-0">#}
+{#                  <div class="small text-muted">#}
+{#                    Key factor insights are not available.#}
+{#                  </div>#}
+{#                </div>#}
+{#              {% endif %}#}
+{#            </div>#}
+{#          </div>#}
+{##}
+{#          <!-- (3) SHAP Plot -->#}
+{#          <div class="result-card span-2">#}
+{#            <div class="rc-head">#}
+{#              <p class="rc-title"><i class="bi bi-bar-chart-steps"></i>SHAP Plot</p>#}
+{#              <span class="badge bg-light text-dark pill">Waterfall</span>#}
+{#            </div>#}
+{##}
+{#            <div class="rc-body">#}
+{#              {% if shap_plot %}#}
+{#                <div class="shap-plot">#}
+{#                  <img src="data:image/png;base64,{{ shap_plot }}" alt="SHAP Plot" class="img-fluid">#}
+{#                </div>#}
+{#              {% else %}#}
+{#                <div class="alert alert-secondary border rounded-4 mb-0">#}
+{#                  <strong>SHAP plot is empty.</strong>#}
+{#                  <div class="hint mt-2">#}
+{#                    SHAP may have failed in the view or shap_plot was not set.#}
+{#                    Check server logs for the underlying exception.#}
+{#                  </div>#}
+{#                </div>#}
+{#              {% endif %}#}
+{#            </div>#}
+{#          </div>#}
+{##}
+{#        </div>#}
 {#      {% endif %}#}
-{##}
-{#      <!-- =======================#}
-{#           ✅ (E) DEBUG PANEL (add these context vars in view)#}
-{#           ======================= -->#}
-{#      <div class="debug">#}
-{#        {% if input_summary %}#}
-{#          <div class="alert alert-light border rounded-4">#}
-{#            <h6 class="mb-2"><i class="bi bi-list-check me-2"></i>Input summary (server received)</h6>#}
-{#            <pre class="mb-0">{{ input_summary }}</pre>#}
-{#          </div>#}
-{#        {% endif %}#}
-{##}
-{#        {% if shap_debug %}#}
-{#          <div class="alert alert-info border rounded-4">#}
-{#            <h6 class="mb-2"><i class="bi bi-bug me-2"></i>SHAP debug</h6>#}
-{#            <pre class="mb-0">{{ shap_debug }}</pre>#}
-{#          </div>#}
-{#        {% endif %}#}
-{##}
-{#        {% if shap_error %}#}
-{#          <div class="alert alert-danger border rounded-4">#}
-{#            <h6 class="mb-2"><i class="bi bi-x-octagon me-2"></i>SHAP error</h6>#}
-{#            <pre class="mb-0">{{ shap_error }}</pre>#}
-{#          </div>#}
-{#        {% endif %}#}
-{#      </div>#}
 {##}
 {#    </div>#}
 {#  </div>#}
 {#</div>#}
 {#</body>#}
 {#</html>#}
+
 
 <!DOCTYPE html>
 {% load widget_tweaks %}
@@ -373,15 +419,12 @@
     .poor-result { background-color: #f8d7da; border-left: 6px solid #721c24; }
     .default-result { background-color: #d1e7dd; border-left: 6px solid #0f5132; }
 
-    /* Result cards */
+    /* Result cards (STACKED: always 1 column) */
     .result-grid { margin-top: 22px; display:grid; gap: 14px; }
-    @media (min-width: 992px){
-      .result-grid { grid-template-columns: 1fr 1fr; align-items: start; }
-      .result-grid .span-2 { grid-column: 1 / -1; }
-    }
     .result-card {
       background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:16px;
       box-shadow:0 8px 20px rgba(0,0,0,.06); overflow:hidden;
+      width: 100%;
     }
     .result-card .rc-head{
       padding:14px 16px;
@@ -392,6 +435,7 @@
     .result-card .rc-body{ padding: 16px; }
     .rc-title{ font-weight:700; margin:0; display:flex; align-items:center; gap:8px; }
     .rc-sub{ margin:0; color:#6c757d; font-size:.9rem; }
+
     .badge-soft {
       background: rgba(13,110,253,.10);
       color:#0d6efd;
@@ -408,6 +452,7 @@
       border: 1px solid rgba(25,135,84,.18);
     }
 
+    .insights { margin-top: 0; padding: 18px; background:#fff3cd; border-left:6px solid #ffecb5; border-radius:12px; }
     .shap-plot img { width:100%; height:auto; border-radius:12px; box-shadow:0 6px 14px rgba(0,0,0,.10); }
   </style>
 </head>
@@ -596,7 +641,7 @@
       {% endif %}
 
       <!-- =========================================================
-           ✅ RESULTS (same content, but styled with current UI theme)
+           ✅ RESULTS (STACKED: 위 → 아래, 동일 너비)
            ========================================================= -->
       {% if result %}
         <div class="result-grid">
@@ -681,7 +726,7 @@
           </div>
 
           <!-- (3) SHAP Plot -->
-          <div class="result-card span-2">
+          <div class="result-card">
             <div class="rc-head">
               <p class="rc-title"><i class="bi bi-bar-chart-steps"></i>SHAP Plot</p>
               <span class="badge bg-light text-dark pill">Waterfall</span>
