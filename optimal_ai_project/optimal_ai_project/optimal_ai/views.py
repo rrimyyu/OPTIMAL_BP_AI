@@ -39,38 +39,34 @@ scalers_is = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optima
 
 def prepare_input_features(collected_data, keep_cols):
     group = collected_data.get("Group")
-
     if group == 0.0:
-        scaler_dict = scalers_cs
+        scaler = scaler_cs
     elif group == 1.0:
-        scaler_dict = scalers_is
+        scaler = scaler_is
     else:
         raise ValueError("Invalid group value")
 
     df = pd.DataFrame([collected_data])
 
-    # ✅ scaler가 가진 컬럼 그룹 중, df에 존재하는 것만 transform
-    for cols, scaler_instance in scaler_dict.items():
-        cols_list = list(cols)
-        existing = [c for c in cols_list if c in df.columns]
-
-        # 아무것도 없으면 스킵
-        if not existing:
-            continue
-
-        # 그룹의 일부만 존재하면 위험하니(스케일러 fit 차원 불일치) "그 그룹 전체가 있을 때만" 변환
-        if len(existing) != len(cols_list):
-            # 부분 컬럼만 있으면 transform 차원이 안 맞아서 오류 → 스킵
-            continue
-
-        df[cols_list] = scaler_instance.transform(df[cols_list])
-
-    # ✅ 최종적으로 우리가 쓰는 10개만 남김
+    # ✅ 필요한 10개가 다 있는지 확인
     missing = [c for c in keep_cols if c not in df.columns]
     if missing:
         raise KeyError(f"Missing columns in input data: {missing}")
 
-    return df[keep_cols]
+    # ✅ 컬럼 순서 고정 (모델 학습 순서 그대로)
+    df = df[keep_cols].copy()
+
+    # ✅ 숫자 변환 (라디오값/문자 들어오는 경우 방지)
+    for c in keep_cols:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    if df.isna().any().any():
+        bad = df.columns[df.isna().iloc[0]].tolist()
+        raise ValueError(f"Non-numeric or missing after conversion: {bad}")
+
+    # ✅ 10개 전체를 한 번에 scaling
+    X_scaled = scaler.transform(df.values).astype(np.float32)  # (1, 10)
+
+    return pd.DataFrame(X_scaled, columns=keep_cols)
 
 def optimal_ai_view(request):
     result = None
