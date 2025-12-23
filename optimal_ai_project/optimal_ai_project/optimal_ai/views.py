@@ -37,8 +37,8 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 scalers_cs = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_cs.pkl")
 scalers_is = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_is.pkl")
 
-def prepare_input_features(collected_data, keep_cols):
-    group = collected_data.get("Group")
+def prepare_input_features(collected_data, keep_cols=None):
+    group = int(float(collected_data.get("Group")))
 
     if group == 0.0:
         scaler = scalers_cs
@@ -76,7 +76,7 @@ def optimal_ai_view(request):
         if form.is_valid():
             collected_data = form.cleaned_data
 
-            scaled_features = prepare_input_features(collected_data, keep_cols=selected_cols)
+            scaled_features = prepare_input_features(collected_data, selected_cols)
             input_features = scaled_features.to_numpy().reshape(1, -1)
 
             model = tf.keras.models.load_model("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/cln_sbp_model.h5")
