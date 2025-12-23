@@ -276,7 +276,6 @@
 {#    </div>#}
 {#</body>#}
 {#</html>#}
-
 <!DOCTYPE html>
 {% load widget_tweaks %}
 <html lang="en">
@@ -301,7 +300,7 @@
     .form-control, .form-select { border-radius:12px; }
     .btn-lg { border-radius:14px; }
 
-    /* ✅ Segmented radio buttons (clickable Yes/No pills) */
+    /* ✅ Segmented radio buttons (clickable pills) */
     .segmented {
       display: inline-flex;
       gap: .5rem;
@@ -331,6 +330,10 @@
     .segmented label:hover{
       border-color: #0d6efd;
     }
+
+    /* spacing so radios appear UNDER the label */
+    .field-block { margin-bottom: 1rem; }
+    .field-block .segmented { margin-top: .35rem; }
   </style>
 </head>
 
@@ -357,77 +360,93 @@
         <div class="mb-4">
           <h5 class="mb-2"><i class="bi bi-person-lines-fill me-2"></i>Patient & Group</h5>
           <div class="row g-3">
+
+            <!-- ✅ Group as clickable pills, placed UNDER label -->
             <div class="col-md-6">
-              <label for="{{ form.Group.id_for_label }}" class="form-label required">Group</label>
-
-              <!-- Group은 현재 선택형(select 또는 radio)일 수 있어 그대로 렌더 -->
-              {# 만약 Group도 radio로 쓰고 싶으면 아래 segmented 패턴으로 바꾸면 됩니다 #}
-              {% render_field form.Group class="form-select" %}
-
-              <div class="hint mt-1">Select the cohort used by the model.</div>
-            </div>
-
-            <div class="col-md-6">
-              <label for="{{ form.pt_age.id_for_label }}" class="form-label required">Age</label>
-              <div class="input-group">
-                {% render_field form.pt_age class="form-control" placeholder="e.g., 68" %}
-                <span class="input-group-text">years</span>
+              <div class="field-block">
+                <label class="form-label required">Group</label>
+                <div class="segmented">
+                  {% for radio in form.Group %}
+                    {{ radio.tag }}
+                    <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                  {% endfor %}
+                </div>
+                <div class="hint mt-2">Select the cohort used by the model.</div>
               </div>
-              <div class="hint mt-1">Integer value recommended.</div>
             </div>
+
+            <div class="col-md-6">
+              <div class="field-block">
+                <label for="{{ form.pt_age.id_for_label }}" class="form-label required">Age</label>
+                <div class="input-group">
+                  {% render_field form.pt_age class="form-control" placeholder="e.g., 68" %}
+                  <span class="input-group-text">years</span>
+                </div>
+                <div class="hint mt-1">Integer value recommended.</div>
+              </div>
+            </div>
+
           </div>
         </div>
 
         <hr class="my-4">
 
-        <!-- 2) Clinical history (✅ clickable binary radios) -->
+        <!-- 2) Clinical history -->
         <div class="mb-4">
           <h5 class="mb-2"><i class="bi bi-clipboard2-pulse me-2"></i>Clinical history</h5>
           <div class="row g-3">
 
-            <!-- Hyperlipidemia -->
+            <!-- ✅ Hyperlipidemia (label then buttons UNDER) -->
             <div class="col-md-6">
-              <label class="form-label required">Hyperlipidemia</label>
-              <div class="segmented">
-                {% for radio in form.Hyperlipidemia %}
-                  {{ radio.tag }}
-                  <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
-                {% endfor %}
+              <div class="field-block">
+                <label class="form-label required">Hyperlipidemia</label>
+                <div class="segmented">
+                  {% for radio in form.Hyperlipidemia %}
+                    {{ radio.tag }}
+                    <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                  {% endfor %}
+                </div>
               </div>
             </div>
 
-            <!-- DM -->
+            <!-- ✅ DM -->
             <div class="col-md-6">
-              <label class="form-label required">Diabetes mellitus (DM)</label>
-              <div class="segmented">
-                {% for radio in form.DM %}
-                  {{ radio.tag }}
-                  <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
-                {% endfor %}
+              <div class="field-block">
+                <label class="form-label required">Diabetes mellitus (DM)</label>
+                <div class="segmented">
+                  {% for radio in form.DM %}
+                    {{ radio.tag }}
+                    <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                  {% endfor %}
+                </div>
               </div>
             </div>
 
-            <!-- Previous stroke -->
+            <!-- ✅ Previous stroke -->
             <div class="col-md-6">
-              <label class="form-label required">Previous stroke</label>
-              <div class="segmented">
-                {% for radio in form.Previous_stroke_existence %}
-                  {{ radio.tag }}
-                  <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
-                {% endfor %}
+              <div class="field-block">
+                <label class="form-label required">Previous stroke</label>
+                <div class="segmented">
+                  {% for radio in form.Previous_stroke_existence %}
+                    {{ radio.tag }}
+                    <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                  {% endfor %}
+                </div>
               </div>
             </div>
 
-            <!-- Anticoagulant -->
+            <!-- ✅ Anticoagulant -->
             <div class="col-md-6">
-              <label class="form-label required">Anticoagulant use</label>
-              <div class="segmented">
-                {% for radio in form.Anticoagulant %}
-                  {{ radio.tag }}
-                  <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
-                {% endfor %}
+              <div class="field-block">
+                <label class="form-label required">Anticoagulant use</label>
+                <div class="segmented">
+                  {% for radio in form.Anticoagulant %}
+                    {{ radio.tag }}
+                    <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                  {% endfor %}
+                </div>
+                <div class="hint mt-2">Current anticoagulant medication (Yes/No).</div>
               </div>
-              <div class="hint mt-1">Current anticoagulant medication (Yes/No).</div>
             </div>
 
           </div>
@@ -440,21 +459,27 @@
           <h5 class="mb-2"><i class="bi bi-activity me-2"></i>Stroke severity</h5>
           <div class="row g-3">
             <div class="col-md-6">
-              <label for="{{ form.NIHSS_IAT_just_before.id_for_label }}" class="form-label required">NIHSS score (just before IAT)</label>
-              <div class="input-group">
-                {% render_field form.NIHSS_IAT_just_before class="form-control" placeholder="e.g., 14" %}
-                <span class="input-group-text">points</span>
+              <div class="field-block">
+                <label for="{{ form.NIHSS_IAT_just_before.id_for_label }}" class="form-label required">
+                  NIHSS score (just before IAT)
+                </label>
+                <div class="input-group">
+                  {% render_field form.NIHSS_IAT_just_before class="form-control" placeholder="e.g., 14" %}
+                  <span class="input-group-text">points</span>
+                </div>
+                <div class="hint mt-1">Typical range 0–42.</div>
               </div>
-              <div class="hint mt-1">Typical range 0–42.</div>
             </div>
 
             <div class="col-md-6">
-              <label for="{{ form.Hgb.id_for_label }}" class="form-label required">Hemoglobin (Hgb)</label>
-              <div class="input-group">
-                {% render_field form.Hgb class="form-control" placeholder="e.g., 13.2" %}
-                <span class="input-group-text">g/dL</span>
+              <div class="field-block">
+                <label for="{{ form.Hgb.id_for_label }}" class="form-label required">Hemoglobin (Hgb)</label>
+                <div class="input-group">
+                  {% render_field form.Hgb class="form-control" placeholder="e.g., 13.2" %}
+                  <span class="input-group-text">g/dL</span>
+                </div>
+                <div class="hint mt-1">Use the most recent lab value.</div>
               </div>
-              <div class="hint mt-1">Use the most recent lab value.</div>
             </div>
           </div>
         </div>
@@ -466,23 +491,29 @@
           <h5 class="mb-2"><i class="bi bi-heart-pulse me-2"></i>SBP metrics</h5>
           <div class="row g-3">
             <div class="col-md-4">
-              <label for="{{ form.systolic_min.id_for_label }}" class="form-label required">SBP minimum</label>
-              <div class="input-group">
-                {% render_field form.systolic_min class="form-control" placeholder="e.g., 105" %}
-                <span class="input-group-text">mmHg</span>
+              <div class="field-block">
+                <label for="{{ form.systolic_min.id_for_label }}" class="form-label required">SBP minimum</label>
+                <div class="input-group">
+                  {% render_field form.systolic_min class="form-control" placeholder="e.g., 105" %}
+                  <span class="input-group-text">mmHg</span>
+                </div>
               </div>
             </div>
 
             <div class="col-md-4">
-              <label for="{{ form.systolic_TR.id_for_label }}" class="form-label required">SBP time rate</label>
-              {% render_field form.systolic_TR class="form-control" placeholder="e.g., 0.12" %}
-              <div class="hint mt-1">Enter the computed TR value used in training.</div>
+              <div class="field-block">
+                <label for="{{ form.systolic_TR.id_for_label }}" class="form-label required">SBP time rate</label>
+                {% render_field form.systolic_TR class="form-control" placeholder="e.g., 0.12" %}
+                <div class="hint mt-1">Enter the computed TR value used in training.</div>
+              </div>
             </div>
 
             <div class="col-md-4">
-              <label class="form-label">Quick check</label>
-              <div class="alert alert-light border rounded-3 mb-0">
-                <div class="small text-muted">Make sure SBP min is plausible (e.g., 60–200 mmHg).</div>
+              <div class="field-block">
+                <label class="form-label">Quick check</label>
+                <div class="alert alert-light border rounded-3 mb-0">
+                  <div class="small text-muted">Make sure SBP min is plausible (e.g., 60–200 mmHg).</div>
+                </div>
               </div>
             </div>
           </div>
