@@ -34,36 +34,8 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 # Load Scaler Objects
-scalers_cs = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_cs.pkl")
-scalers_is = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_is.pkl")
-
-# def prepare_input_features(collected_data, keep_cols=None):
-#     group = int(float(collected_data.get("Group")))
-#
-#     if group == 0.0:
-#         scaler = scalers_cs
-#         if scaler is None:
-#             raise ValueError("Scaler for group 0 not found")
-#     elif group == 1.0:
-#         scaler = scalers_is
-#         if scaler is None:
-#             raise ValueError("Scaler for group 1 not found")
-#     else:
-#         raise ValueError("Invalid group value")
-#
-#     df = pd.DataFrame([collected_data])
-#
-#     for cols, scaler_instance in scaler.items():
-#         cols_list = list(cols)
-#         df[cols_list] = scaler_instance.transform(df[cols_list])
-#
-#     if keep_cols is not None:
-#         missing = [c for c in keep_cols if c not in df.columns]
-#         if missing:
-#             raise KeyError(f"Missing columns in input data: {missing}")
-#         df = df[keep_cols]
-#
-#     return df
+scalers_cs = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_cs_10.pkl")
+scalers_is = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_is_10.pkl")
 
 def prepare_input_features(collected_data, keep_cols):
     group = collected_data.get("Group")
