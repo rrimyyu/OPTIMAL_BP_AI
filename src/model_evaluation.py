@@ -1,313 +1,643 @@
-# model_evaluation.py
-from __future__ import annotations
-from pathlib import Path
-from typing import Iterable, List, Tuple
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib
 import tensorflow as tf
+from scipy import stats
 
-from sklearn.metrics import roc_curve, auc, accuracy_score, precision_score, recall_score, confusion_matrix, f1_score
-from sklearn.model_selection import KFold
-from confidenceinterval import roc_auc_score as ci_roc_auc_score
+from sklearn.calibration import calibration_curve
+from sklearn.metrics import (
+    roc_curve,
+    roc_auc_score,
+    auc,
+    confusion_matrix,
+    precision_score,
+    brier_score_loss,
+)
+from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
-matplotlib.rcParams["font.family"] = "Arial"
+from confidenceinterval import roc_auc_score as roc_auc_ci  # assumed to return (auc, ci)
+from compare_auc_delong import delong_roc_test
+
+plt.rcParams["font.family"] = "Arial"
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Utilities
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _predict_proba_binary(model, X: pd.DataFrame) -> np.ndarray:
-    """
-    Return probability of the positive class for either a Keras model
-    or an sklearn-like estimator. The output is a 1-D float array in [0,1].
-    """
-    # Keras models (Sequential/Functional)
-    if isinstance(model, tf.keras.Model):
-        # Keras predict returns (N,1) for binary; ravel() makes it (N,)
-        proba = model.predict(X.to_numpy(), verbose=0).ravel()
-        # If the model outputs logits, you may uncomment below:
-        # proba = 1 / (1 + np.exp(-proba))
-        return proba.astype(float)
-
-    # sklearn-like models with predict_proba
+# =============================
+# Basic evaluation (Train/Valid)
+# =============================
+def _predict_proba_any(model, X):
+    """Supports both sklearn / keras: returns positive-class probability (1D)."""
     if hasattr(model, "predict_proba"):
-        return model.predict_proba(X)[:, 1].ravel().astype(float)
-
-    # Fallback: use decision_function or predict (not recommended, but safe-guard)
-    if hasattr(model, "decision_function"):
-        scores = model.decision_function(X).ravel().astype(float)
-        # Min-max to [0,1] if scores are unbounded; adjust if you prefer sigmoid
-        s_min, s_max = scores.min(), scores.max()
-        proba = (scores - s_min) / (s_max - s_min + 1e-12)
-        return proba
+        proba = model.predict_proba(X)
     else:
-        # As a last resort, treat predicted labels as probabilities (0/1)
-        return model.predict(X).ravel().astype(float)
+        Xv = X.to_numpy() if hasattr(X, "to_numpy") else X
+        proba = model.predict(Xv)
+
+    proba = np.asarray(proba)
+    if proba.ndim == 1:
+        return proba.ravel()
+    if proba.shape[1] == 1:
+        return proba[:, 0].ravel()
+    return proba[:, 1].ravel()
 
 
-def _youden_optimal_threshold(y_true: Iterable[int], y_proba: np.ndarray) -> float:
+# =============================
+# DCA helpers
+# =============================
+def compute_net_benefit(y_true, y_prob, pt_grid):
+    y_true = np.asarray(y_true).astype(int).ravel()
+    y_prob = np.asarray(y_prob).astype(float).ravel()
+
+    N = len(y_true)
+    event_rate = y_true.mean()
+
+    nb_model = np.zeros_like(pt_grid, dtype=float)
+    nb_all = np.zeros_like(pt_grid, dtype=float)
+    nb_none = np.zeros_like(pt_grid, dtype=float)
+
+    for i, pt in enumerate(pt_grid):
+        w = pt / (1 - pt)
+        y_hat = (y_prob >= pt).astype(int)
+        TP = np.sum((y_true == 1) & (y_hat == 1))
+        FP = np.sum((y_true == 0) & (y_hat == 1))
+
+        nb_model[i] = (TP / N) - (FP / N) * w
+        nb_all[i] = event_rate - (1 - event_rate) * w
+        nb_none[i] = 0.0
+
+    return nb_model, nb_all, nb_none
+
+
+def bootstrap_pvalue_brier(y_true, prob_a, prob_b, n_boot=2000, seed=42):
     """
-    Compute Youden's J statistic to choose the optimal threshold.
-    Returns the threshold value (float).
+    Paired bootstrap p-value for difference in Brier score.
+    H0: BS_a - BS_b = 0
     """
-    fpr, tpr, thresholds = roc_curve(y_true, y_proba)
-    youden = tpr - fpr  # equivalent to Sens + Spec - 1
-    return thresholds[np.argmax(youden)]
+    rng = np.random.default_rng(seed)
+    y_true = np.asarray(y_true).astype(int)
+    prob_a = np.asarray(prob_a).astype(float)
+    prob_b = np.asarray(prob_b).astype(float)
+
+    if not (len(y_true) == len(prob_a) == len(prob_b)):
+        raise ValueError("y_true, prob_a, prob_b must have the same length (paired samples).")
+
+    n = len(y_true)
+    diffs = np.empty(n_boot, dtype=float)
+    obs_diff = brier_score_loss(y_true, prob_a) - brier_score_loss(y_true, prob_b)
+
+    for i in range(n_boot):
+        idx = rng.integers(0, n, size=n)
+        diffs[i] = brier_score_loss(y_true[idx], prob_a[idx]) - brier_score_loss(y_true[idx], prob_b[idx])
+
+    p = 2 * min(np.mean(diffs <= 0), np.mean(diffs >= 0))
+    return float(np.clip(p, 0.0, 1.0)), float(obs_diff)
 
 
-def _binary_metrics_from_threshold(y_true: Iterable[int], y_proba: np.ndarray, threshold: float) -> Tuple[float, float, float, float]:
-    """
-    Compute Sensitivity, Specificity, PPV, NPV using a fixed threshold.
-    Returns: (sensitivity, specificity, ppv, npv)
-    """
-    y_pred = (y_proba > threshold).astype(int)
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-    sens = tp / (tp + fn + 1e-12)
-    spec = tn / (tn + fp + 1e-12)
-    ppv = precision_score(y_true, y_pred, zero_division=0)
-    npv = tn / (tn + fn + 1e-12)
-    return sens, spec, ppv, npv
+def visualize_calibration_curve(
+    model_cln,
+    X_cln,
+    y_cln,
+    model_bp,
+    X_bp,
+    y_bp,
+    label_cln="Clinical only",
+    label_bp="Clinical & SBP metrics",
+    filename=None,
+):
+    y_proba_cln = _predict_proba_any(model_cln, X_cln)
+    y_proba_bp = _predict_proba_any(model_bp, X_bp)
 
+    y_cln = np.asarray(y_cln).astype(int)
+    y_bp = np.asarray(y_bp).astype(int)
 
-def _auc_with_ci(y_true: Iterable[int], y_proba: np.ndarray, confidence: float = 0.95) -> Tuple[float, Tuple[float, float]]:
-    """
-    Compute AUC and its (lower, upper) CI using confidenceinterval.roc_auc_score.
-    """
-    fpr, tpr, _ = roc_curve(y_true, y_proba)
-    auc_val = auc(fpr, tpr)
-    # ci_roc_auc_score returns (auc, (low, high))
-    _, ci = ci_roc_auc_score(y_true, y_proba, confidence_level=confidence)
-    return float(auc_val), (float(ci[0]), float(ci[1]))
+    brier_cln = brier_score_loss(y_cln, y_proba_cln)
+    brier_bp = brier_score_loss(y_bp, y_proba_bp)
 
+    print(f"[{label_cln}] Brier score = {brier_cln:.3f}")
+    print(f"[{label_bp}]  Brier score = {brier_bp:.3f}")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Core evaluators
-# ──────────────────────────────────────────────────────────────────────────────
+    p_value_bs, obs_bs_diff = bootstrap_pvalue_brier(
+        y_true=y_cln,
+        prob_a=y_proba_bp,
+        prob_b=y_proba_cln,
+        n_boot=2000,
+        seed=42,
+    )
+    print(f"ΔBS ({label_bp} - {label_cln}) = {obs_bs_diff:.4f}, P = {p_value_bs:.4f}")
 
-def evaluate_model(model, train_X: pd.DataFrame, train_y: pd.Series,
-                   valid_X: pd.DataFrame, valid_y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
-    """
-    Evaluate a binary classifier on train and valid sets.
-    Returns:
-        df (pd.DataFrame): rows [train, valid] with AUC, Sensitivity, Specificity, PPV, NPV, CI.
-        y_proba_train (np.ndarray): predicted probabilities on train set.
-        y_proba_valid (np.ndarray): predicted probabilities on valid set.
-    """
-    # Predict probabilities
-    y_proba_train = _predict_proba_binary(model, train_X)
-    y_proba_valid = _predict_proba_binary(model, valid_X)
+    prob_true_cln, prob_pred_cln = calibration_curve(y_cln, y_proba_cln, n_bins=10)
+    prob_true_bp, prob_pred_bp = calibration_curve(y_bp, y_proba_bp, n_bins=10)
 
-    # Choose threshold on each split via Youden
-    thr_tr = _youden_optimal_threshold(train_y, y_proba_train)
-    thr_va = _youden_optimal_threshold(valid_y, y_proba_valid)
+    plt.figure(figsize=(5, 5))
+    plt.plot(
+        prob_pred_bp,
+        prob_true_bp,
+        marker="o",
+        linestyle="-",
+        color="r",
+        label=f"{label_bp}(Brier = {brier_bp:.2f})",
+    )
+    plt.plot(
+        prob_pred_cln,
+        prob_true_cln,
+        marker="o",
+        linestyle="-",
+        color="c",
+        label=f"{label_cln}(Brier = {brier_cln:.2f})",
+    )
+    plt.plot([0, 1], [0, 1], "--", color="grey", label="Perfect calibration")
 
-    # Train metrics
-    auc_tr, ci_tr = _auc_with_ci(train_y, y_proba_train)
-    sens_tr, spec_tr, ppv_tr, npv_tr = _binary_metrics_from_threshold(train_y, y_proba_train, thr_tr)
-
-    # Valid metrics
-    auc_va, ci_va = _auc_with_ci(valid_y, y_proba_valid)
-    sens_va, spec_va, ppv_va, npv_va = _binary_metrics_from_threshold(valid_y, y_proba_valid, thr_va)
-
-    df = pd.DataFrame({
-        "AUC":        [round(auc_tr, 3), round(auc_va, 3)],
-        "Sensitivity":[round(sens_tr, 3), round(sens_va, 3)],
-        "Specificity":[round(spec_tr, 3), round(spec_va, 3)],
-        "PPV":        [round(ppv_tr, 3),  round(ppv_va, 3)],
-        "NPV":        [round(npv_tr, 3),  round(npv_va, 3)],
-        "CI":         [tuple(np.round(ci_tr, 3)), tuple(np.round(ci_va, 3))]
-    }, index=["train", "valid"])
-
-    return df, y_proba_train, y_proba_valid
-
-
-# Clinical-only vs Clinical+SBP
-def visualize_roc_curve(model_cln, X_cln: pd.DataFrame, y_cln: pd.Series,
-                        model_bp,  X_bp:  pd.DataFrame, y_bp:  pd.Series,
-                        p_value, out_path: str | Path) -> Tuple[pd.DataFrame, plt.Figure, plt.Figure]:
-    """
-    Draw paired ROC curves (clinical-only vs clinical+SBP) and export a figure.
-    Returns:
-        metrics_df (two rows), fig_cln, fig_bp (single-curve export figures).
-    """
-    # Probabilities
-    proba_cln = _predict_proba_binary(model_cln, X_cln)
-    proba_bp  = _predict_proba_binary(model_bp,  X_bp)
-
-    # ROCs
-    fpr_c, tpr_c, thr_c = roc_curve(y_cln, proba_cln)
-    fpr_b, tpr_b, thr_b = roc_curve(y_bp,  proba_bp)
-
-    auc_c = auc(fpr_c, tpr_c)
-    auc_b = auc(fpr_b, tpr_b)
-
-    _, ci_c = ci_roc_auc_score(y_cln, proba_cln, confidence_level=0.95)
-    _, ci_b = ci_roc_auc_score(y_bp,  proba_bp,  confidence_level=0.95)
-
-    # Thresholds (Youden) and confusion-matrix-based metrics
-    thr_opt_c = thr_c[np.argmax(tpr_c - fpr_c)]
-    thr_opt_b = thr_b[np.argmax(tpr_b - fpr_b)]
-
-    sens_c, spec_c, ppv_c, npv_c = _binary_metrics_from_threshold(y_cln, proba_cln, thr_opt_c)
-    sens_b, spec_b, ppv_b, npv_b = _binary_metrics_from_threshold(y_bp,  proba_bp,  thr_opt_b)
-
-    metrics_df = pd.DataFrame({
-        "AUC":        [round(auc_c, 3),          round(auc_b, 3)],
-        "Sensitivity":[round(sens_c, 3),         round(sens_b, 3)],
-        "Specificity":[round(spec_c, 3),         round(spec_b, 3)],
-        "PPV":        [round(ppv_c, 3),          round(ppv_b, 3)],
-        "NPV":        [round(npv_c, 3),          round(npv_b, 3)],
-        "CI":         [tuple(np.round(ci_c, 3)), tuple(np.round(ci_b, 3))]
-    }, index=["clinical_only", "clinical_plus_SBP"])
-
-    # Combined ROC figure
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    fig = plt.figure(figsize=(5, 5))
-    ax = fig.gca()
-    ax.set_aspect("equal", "box")
-    ax.plot(fpr_b, tpr_b, lw=1, label=f"Clinical + SBP (AUC = {auc_b:.2f})")
-    ax.plot(fpr_c, tpr_c, lw=1, label=f"Clinical only (AUC = {auc_c:.2f})")
-    ax.plot([0, 1], [0, 1], color="darkgrey", lw=1, linestyle="--")
-    ax.set_xlim(-0.01, 1.01)
-    ax.set_ylim(-0.01, 1.01)
-    ax.set_xlabel("1 - Specificity", fontsize=14)
-    ax.set_ylabel("Sensitivity", fontsize=14)
-    ax.legend(loc="lower right", frameon=False, fontsize=12)
-
-    # DeLong p-value annotation
-    if isinstance(p_value, (np.ndarray, list)) and np.size(p_value) == 1:
-        p_value = float(np.array(p_value).ravel()[0])
-    if p_value < 0.001:
-        ax.text(0.75, 0.5, r"$\it{P} < 0.001$", ha="center", va="center", fontsize=14)
+    if p_value_bs < 0.001:
+        plt.text(
+            0.75,
+            0.25,
+            r"$\it{P}$ (Brier) < 0.001",
+            transform=plt.gca().transAxes,
+            ha="center",
+            va="center",
+            fontsize=16,
+        )
     else:
-        ax.text(0.75, 0.5, rf"$\it{{P}}$ = {p_value:.3f}", ha="center", va="center", fontsize=14)
+        plt.text(
+            0.75,
+            0.25,
+            f"$\\it{{P}}$ (Brier) = {p_value_bs:.3f}",
+            transform=plt.gca().transAxes,
+            ha="center",
+            va="center",
+            fontsize=16,
+        )
 
-    fig.tight_layout()
-    fig.savefig(out_path, format="svg", dpi=200)
-    plt.close(fig)
+    plt.xlabel("Predicted probability", fontsize=16)
+    plt.ylabel("Observed event rate", fontsize=16)
+    plt.xlim([-0.01, 1.01])
+    plt.ylim([-0.01, 1.01])
+    plt.legend(loc="upper left", frameon=False, fontsize=10)
+    plt.tight_layout()
 
-    # Export single-curve figures (for paper-ready panels if needed)
-    fig_cln = plt.figure(figsize=(5, 5))
-    axc = fig_cln.gca()
-    axc.set_aspect("equal", "box")
-    axc.plot(fpr_c, tpr_c, lw=1, label=f"DNN (AUC = {auc_c:.2f})")
-    axc.plot([0, 1], [0, 1], color="darkgrey", lw=1, linestyle="--")
-    axc.legend(frameon=False)
-    fig_cln.tight_layout()
+    if filename is not None:
+        plt.savefig(filename, format=filename.split(".")[-1])
 
-    fig_bp = plt.figure(figsize=(5, 5))
-    axb = fig_bp.gca()
-    axb.set_aspect("equal", "box")
-    axb.plot(fpr_b, tpr_b, lw=1, label=f"DNN (AUC = {auc_b:.2f})")
-    axb.plot([0, 1], [0, 1], color="darkgrey", lw=1, linestyle="--")
-    axb.legend(frameon=False)
-    fig_bp.tight_layout()
+    plt.show()
 
-    return metrics_df, fig_cln, fig_bp
+    return pd.DataFrame({"Model": [label_cln, label_bp], "Brier_score": [brier_cln, brier_bp]})
 
 
-def visualize_roc_comparison(list_of_models: List, X: pd.DataFrame, y: pd.Series,
-                             base_fig: plt.Figure, out_path: str | Path) -> None:
+# =============================
+# Bootstrap optimism (model_fn)
+# =============================
+def bootstrap_optimism_model_fn(
+    model_fn,
+    X,
+    y,
+    B=500,
+    random_state=42,
+    fit_kwargs=None,
+    verbose_every=0,
+):
     """
-    Plot ROC curves of multiple classical ML models on a shared axis
-    (overlayed on top of a base figure for consistent styling).
-    The first element of `list_of_models` is assumed to be the reference (e.g., DNN)
-    and is not re-plotted here.
+    Bootstrap optimism correction for AUC (internal validation).
+    model_fn: returns a fresh model instance.
     """
-    # Compute ROCs
-    roc_items = []
-    for mdl in list_of_models:
-        proba = _predict_proba_binary(mdl, X)
-        fpr, tpr, _ = roc_curve(y, proba)
-        roc_items.append((fpr, tpr, auc(fpr, tpr)))
+    if fit_kwargs is None:
+        fit_kwargs = {}
 
-    # Remove first item (the reference DNN already drawn in base figure)
-    roc_items = roc_items[1:]
+    X = np.asarray(X, dtype=np.float32)
+    y = np.asarray(y).astype(int).ravel()
 
-    labels = ["Decision Tree", "Extra Tree", "Random Forest", "XGBoost", "LightGBM", "CatBoost"]
-    colors = ["limegreen", "limegreen", "dodgerblue", "dodgerblue", "dodgerblue", "dodgerblue"]
-    linestyles = ["solid", "dotted", "solid", "dotted", "dashed", "dashdot"]
+    rng = np.random.default_rng(random_state)
+    n = len(y)
 
-    # Draw on the provided base figure
-    fig = base_fig
-    ax = fig.gca()
-    for (fpr, tpr, roc_auc), lab, col, ls in zip(roc_items, labels, colors, linestyles):
-        ax.plot(fpr, tpr, color=col, linestyle=ls, lw=1, alpha=0.7, label=f"{lab} (AUC = {roc_auc:.2f})")
+    base_model = model_fn()
+    base_model.fit(X, y, **fit_kwargs)
+    yhat_base = np.asarray(base_model.predict(X)).ravel()
+    auc_apparent = float(roc_auc_score(y, yhat_base))
 
-    ax.plot([0, 1], [0, 1], color="darkgrey", lw=1, linestyle="--")
-    ax.set_xlim(-0.01, 1.01)
-    ax.set_ylim(-0.01, 1.01)
-    ax.set_xlabel("1 - Specificity", fontsize=14)
-    ax.set_ylabel("Sensitivity", fontsize=14)
-    ax.legend(loc="lower right", frameon=False, fontsize=12)
+    optimism_list, apparent_list, test_list = [], [], []
 
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.tight_layout()
-    fig.savefig(out_path, format="svg", dpi=200)
-    plt.close(fig)
+    for b in range(B):
+        idx = rng.integers(0, n, n)
+        Xb, yb = X[idx], y[idx]
+
+        if len(np.unique(yb)) < 2:
+            continue
+
+        m = model_fn()
+        m.fit(Xb, yb, **fit_kwargs)
+
+        yhat_b = np.asarray(m.predict(Xb)).ravel()
+        auc_boot = float(roc_auc_score(yb, yhat_b))
+
+        yhat_o = np.asarray(m.predict(X)).ravel()
+        auc_orig = float(roc_auc_score(y, yhat_o))
+
+        optimism = auc_boot - auc_orig
+        optimism_list.append(optimism)
+        apparent_list.append(auc_boot)
+        test_list.append(auc_orig)
+
+        if verbose_every and (b + 1) % verbose_every == 0:
+            print(f"[bootstrap {b+1}/{B}] auc_boot={auc_boot:.4f}, auc_orig={auc_orig:.4f}, opt={optimism:.4f}")
+
+    optimism_arr = np.array(optimism_list, dtype=float)
+    mean_optimism = float(np.mean(optimism_arr)) if len(optimism_arr) else np.nan
+    auc_corrected = float(auc_apparent - mean_optimism)
+
+    return {
+        "auc_apparent": auc_apparent,
+        "auc_optimism_mean": mean_optimism,
+        "auc_corrected": auc_corrected,
+        "optimism_dist": optimism_arr,
+        "apparent_dist": np.array(apparent_list, dtype=float),
+        "test_dist": np.array(test_list, dtype=float),
+        "n_effective_bootstrap": int(len(optimism_arr)),
+    }
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Optional: training curves
-# ──────────────────────────────────────────────────────────────────────────────
+# =============================
+# Validation ROC (DeLong)
+# =============================
+def visualize_roc_curve_valid_with_delong(
+    model,
+    X_valid,
+    y_valid_mrs,
+    model_bp,
+    X_bp_valid,
+    y_bp_valid_mrs,
+    p_value_valid=None,
+    filename="ROC_VALID_DELONG.svg",
+):
+    y_cln = np.asarray(y_valid_mrs).astype(int).ravel()
+    y_bp = np.asarray(y_bp_valid_mrs).astype(int).ravel()
 
-def visualize_loss_and_accuracy(history, history_bp, out_dir: str | Path = "results/reports") -> None:
+    if len(y_cln) != len(y_bp):
+        raise ValueError("Validation sample size differs between models.")
+    if not np.array_equal(y_cln, y_bp):
+        raise ValueError("y_valid_mrs and y_bp_valid_mrs differ. Ensure identical samples and ordering.")
+
+    y_proba_cln = _predict_proba_any(model, X_valid)
+    y_proba_bp = _predict_proba_any(model_bp, X_bp_valid)
+
+    if p_value_valid is None:
+        p_value_valid = delong_roc_test(y_cln, y_proba_cln, y_proba_bp)
+
+    p_scalar = float(p_value_valid[0, 0]) if hasattr(p_value_valid, "shape") else float(p_value_valid)
+
+    fpr_cln, tpr_cln, _ = roc_curve(y_cln, y_proba_cln)
+    fpr_bp, tpr_bp, _ = roc_curve(y_cln, y_proba_bp)
+
+    auc_cln = float(roc_auc_score(y_cln, y_proba_cln))
+    auc_bp = float(roc_auc_score(y_cln, y_proba_bp))
+
+    plt.figure(figsize=(5, 5))
+    ax = plt.gca()
+    ax.set_aspect("equal", "datalim")
+
+    plt.plot(fpr_bp, tpr_bp, color="r", lw=2, label=f"Clinical & SBP metrics (AUC = {auc_bp:.2f})")
+    plt.plot(fpr_cln, tpr_cln, color="c", lw=2, label=f"Clinical only (AUC = {auc_cln:.2f})")
+    plt.plot([0, 1], [0, 1], lw=1, linestyle="--", color="darkgrey")
+
+    txt = r"$\it{P} < 0.001$" if p_scalar < 0.001 else f"$\\it{{P}}$ = {p_scalar:.3f}"
+    plt.text(0.75, 0.5, txt, transform=ax.transAxes, ha="center", va="center", fontsize=16)
+
+    plt.xlim([-0.01, 1.01])
+    plt.ylim([-0.01, 1.01])
+    plt.xlabel("1 - Specificity", fontsize=16)
+    plt.ylabel("Sensitivity", fontsize=16)
+    plt.legend(loc="lower right", frameon=False, fontsize=12)
+    plt.tight_layout()
+
+    if filename is not None:
+        plt.savefig(filename, format=filename.split(".")[-1])
+    plt.show()
+
+    return p_value_valid, auc_cln, auc_bp
+
+
+def visualize_roc_curve_valid_param_delong(
+    model_full,
+    X_full_valid,
+    y_full_valid,
+    model_red,
+    X_red_valid,
+    y_red_valid,
+    n_full,
+    n_reduced,
+    label_prefix="Clinical only",
+    p_value_valid=None,
+    filename="ROC_VALID_PARAM_DELONG.svg",
+):
+    y_full = np.asarray(y_full_valid).astype(int).ravel()
+    y_red = np.asarray(y_red_valid).astype(int).ravel()
+
+    if len(y_full) != len(y_red):
+        raise ValueError("Validation sample size differs between models.")
+    if not np.array_equal(y_full, y_red):
+        raise ValueError("y_full_valid and y_red_valid differ. Ensure identical samples and ordering.")
+
+    y_proba_full = _predict_proba_any(model_full, X_full_valid)
+    y_proba_red = _predict_proba_any(model_red, X_red_valid)
+
+    if p_value_valid is None:
+        p_value_valid = delong_roc_test(y_full, y_proba_full, y_proba_red)
+
+    p_scalar = float(p_value_valid[0, 0]) if hasattr(p_value_valid, "shape") else float(p_value_valid)
+
+    fpr_full, tpr_full, _ = roc_curve(y_full, y_proba_full)
+    fpr_red, tpr_red, _ = roc_curve(y_full, y_proba_red)
+
+    auc_full = float(roc_auc_score(y_full, y_proba_full))
+    auc_red = float(roc_auc_score(y_full, y_proba_red))
+
+    plt.figure(figsize=(5, 5))
+    ax = plt.gca()
+    ax.set_aspect("equal", "datalim")
+
+    plt.plot(
+        fpr_red,
+        tpr_red,
+        color="r",
+        lw=2,
+        label=f"{label_prefix} ({n_reduced} features, AUC = {auc_red:.2f})",
+    )
+    plt.plot(
+        fpr_full,
+        tpr_full,
+        color="c",
+        lw=2,
+        label=f"{label_prefix} ({n_full} features, AUC = {auc_full:.2f})",
+    )
+    plt.plot([0, 1], [0, 1], lw=1, linestyle="--", color="darkgrey")
+
+    txt = r"$\it{P} < 0.001$" if p_scalar < 0.001 else f"$\\it{{P}}$ = {p_scalar:.3f}"
+    plt.text(0.75, 0.5, txt, transform=ax.transAxes, ha="center", va="center", fontsize=16)
+
+    plt.xlim([-0.01, 1.01])
+    plt.ylim([-0.01, 1.01])
+    plt.xlabel("1 - Specificity", fontsize=16)
+    plt.ylabel("Sensitivity", fontsize=16)
+    plt.legend(loc="lower right", frameon=False, fontsize=12)
+    plt.tight_layout()
+
+    if filename is not None:
+        plt.savefig(filename, format=filename.split(".")[-1])
+    plt.show()
+
+    return p_value_valid, auc_full, auc_red
+
+
+# =============================
+# Validation bootstrap CI (AUC + ΔAUC)
+# =============================
+def bootstrap_auc_ci_valid(
+    model,
+    X_valid,
+    y_valid,
+    model_bp,
+    X_bp_valid,
+    y_bp_valid,
+    n_bootstrap: int = 2000,
+    random_state: int = 42,
+):
+    rng = np.random.default_rng(random_state)
+
+    y_valid = np.asarray(y_valid).astype(int).ravel()
+    y_bp_valid = np.asarray(y_bp_valid).astype(int).ravel()
+
+    if len(y_valid) != len(y_bp_valid):
+        raise ValueError("Validation sample size differs between models.")
+    if not np.array_equal(y_valid, y_bp_valid):
+        raise ValueError("y_valid and y_bp_valid differ. Ensure identical samples and ordering.")
+
+    n = len(y_valid)
+
+    y_proba_cln = _predict_proba_any(model, X_valid)
+    y_proba_bp = _predict_proba_any(model_bp, X_bp_valid)
+
+    auc_cln = float(roc_auc_score(y_valid, y_proba_cln))
+    auc_bp = float(roc_auc_score(y_valid, y_proba_bp))
+    auc_diff = auc_bp - auc_cln
+
+    aucs_cln_bs, aucs_bp_bs, aucs_diff_bs = [], [], []
+
+    for _ in range(n_bootstrap):
+        idx = rng.integers(0, n, size=n)
+        y_bs = y_valid[idx]
+        if len(np.unique(y_bs)) < 2:
+            continue
+
+        try:
+            auc_cln_b = roc_auc_score(y_bs, y_proba_cln[idx])
+            auc_bp_b = roc_auc_score(y_bs, y_proba_bp[idx])
+        except ValueError:
+            continue
+
+        aucs_cln_bs.append(auc_cln_b)
+        aucs_bp_bs.append(auc_bp_b)
+        aucs_diff_bs.append(auc_bp_b - auc_cln_b)
+
+    aucs_cln_bs = np.array(aucs_cln_bs)
+    aucs_bp_bs = np.array(aucs_bp_bs)
+    aucs_diff_bs = np.array(aucs_diff_bs)
+
+    cln_low, cln_high = np.percentile(aucs_cln_bs, [2.5, 97.5])
+    bp_low, bp_high = np.percentile(aucs_bp_bs, [2.5, 97.5])
+    diff_low, diff_high = np.percentile(aucs_diff_bs, [2.5, 97.5])
+
+    print("===== Bootstrap 95% CI (Validation AUC) =====")
+    print(f"Model 1 AUC (cln)        : {auc_cln:.3f} [{cln_low:.3f}, {cln_high:.3f}]")
+    print(f"Model 2 AUC (bp or other): {auc_bp:.3f} [{bp_low:.3f},  {bp_high:.3f}]")
+    print("---------------------------------------------")
+    print(f"AUC difference (model2 - model1): {auc_diff:.3f} [{diff_low:.3f}, {diff_high:.3f}]")
+    print("=============================================")
+
+    return {
+        "auc_cln": auc_cln,
+        "auc_cln_ci": (float(cln_low), float(cln_high)),
+        "auc_bp": auc_bp,
+        "auc_bp_ci": (float(bp_low), float(bp_high)),
+        "auc_diff": auc_diff,
+        "auc_diff_ci": (float(diff_low), float(diff_high)),
+    }
+
+
+# =============================
+# Validation DCA
+# =============================
+def visualize_dca_valid(
+    model,
+    X_valid,
+    y_valid_mrs,
+    model_bp,
+    X_bp_valid,
+    y_bp_valid_mrs,
+    pt_min=0.05,
+    pt_max=0.60,
+    n_pts=100,
+    filename="DCA_VALID.svg",
+):
+    y_cln = np.asarray(y_valid_mrs).astype(int).ravel()
+    y_bp = np.asarray(y_bp_valid_mrs).astype(int).ravel()
+
+    if len(y_cln) != len(y_bp):
+        raise ValueError("Validation sample size differs between models.")
+    if not np.array_equal(y_cln, y_bp):
+        raise ValueError("y_valid_mrs and y_bp_valid_mrs differ. Ensure identical samples and ordering.")
+
+    p_cln = _predict_proba_any(model, X_valid)
+    p_bp = _predict_proba_any(model_bp, X_bp_valid)
+
+    pt_grid = np.linspace(pt_min, pt_max, n_pts)
+
+    nb_cln, nb_all, nb_none = compute_net_benefit(y_cln, p_cln, pt_grid)
+    nb_bp, _, _ = compute_net_benefit(y_cln, p_bp, pt_grid)
+
+    dca_df = pd.DataFrame(
+        {
+            "threshold": pt_grid,
+            "NB_cln": nb_cln,
+            "NB_bp": nb_bp,
+            "NB_all": nb_all,
+            "NB_none": nb_none,
+            "delta_NB": nb_bp - nb_cln,
+        }
+    )
+
+    plt.figure(figsize=(6, 5))
+    plt.plot(pt_grid, nb_bp, label="Clinical & SBP metrics", color="r", lw=2)
+    plt.plot(pt_grid, nb_cln, label="Clinical only", color="c", lw=2)
+    plt.plot(pt_grid, nb_all, label="Treat all", linestyle="--", color="grey", lw=1)
+    plt.plot(pt_grid, nb_none, label="Treat none", linestyle="--", color="grey", lw=1)
+
+    plt.axhline(0, color="grey", lw=0.5)
+    plt.xlabel("Threshold probability", fontsize=16)
+    plt.ylabel("Net benefit", fontsize=16)
+    plt.xlim([pt_min, pt_max])
+    plt.legend(loc="lower left", frameon=False, fontsize=12)
+    plt.tight_layout()
+
+    if filename is not None:
+        plt.savefig(filename, format=filename.split(".")[-1])
+    plt.show()
+
+    return dca_df
+
+
+# =============================
+# DNN CV (5-fold only) + seed search
+# =============================
+callbacks = [
+    tf.keras.callbacks.EarlyStopping(monitor="val_auc", mode="max", patience=30, restore_best_weights=True),
+    tf.keras.callbacks.ReduceLROnPlateau(monitor="val_auc", mode="max", factor=0.5, patience=10, min_lr=1e-6),
+]
+
+
+def k_fold_cross_validation_5fold(
+    model_fn,
+    feature,
+    label,
+    filename,
+    group=None,
+    color="c",
+    n_splits=5,
+    shuffle=True,
+    random_state=42,
+    epochs=300,
+    batch_size=64,
+    verbose=0,
+):
     """
-    Plot loss/accuracy curves for two histories (clinical-only and clinical+SBP).
-    Files are saved in `out_dir` with fixed names for convenience.
+    5-fold CV for Keras DNN (NO repeats).
+    - model_fn: creates a new model for each fold.
     """
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    np.random.seed(random_state)
+    tf.random.set_seed(random_state)
 
-    # Clinical-only
-    fig1 = plt.figure(figsize=(5, 5))
-    ax1 = fig1.gca()
-    ax1.plot(history.history["loss"], label="Training Loss")
-    ax1.plot(history.history["val_loss"], label="Validation Loss")
-    ax1.set_xlabel("Epochs", fontsize=14)
-    ax1.set_ylabel("Loss", fontsize=14)
-    ax1.legend(frameon=False, fontsize=12)
-    fig1.tight_layout()
-    fig1.savefig(out_dir / "7_LOSS_CLN.svg", format="svg", dpi=200)
-    plt.close(fig1)
+    y = np.asarray(label).astype(int)
 
-    fig2 = plt.figure(figsize=(5, 5))
-    ax2 = fig2.gca()
-    ax2.plot(history.history["accuracy"], label="Training Accuracy")
-    ax2.plot(history.history["val_accuracy"], label="Validation Accuracy")
-    ax2.set_xlabel("Epochs", fontsize=14)
-    ax2.set_ylabel("Accuracy", fontsize=14)
-    ax2.legend(frameon=False, fontsize=12)
-    fig2.tight_layout()
-    fig2.savefig(out_dir / "8_ACC_CLN.svg", format="svg", dpi=200)
-    plt.close(fig2)
+    if group is not None:
+        g = np.asarray(group)
+        strata = pd.Series(g).astype(str) + "_" + pd.Series(y).astype(str)
+        print("Stratified by: treatment group + outcome")
+    else:
+        strata = pd.Series(y)
+        print("Stratified by: outcome only")
 
-    # Clinical+SBP
-    fig3 = plt.figure(figsize=(5, 5))
-    ax3 = fig3.gca()
-    ax3.plot(history_bp.history["loss"], label="Training Loss")
-    ax3.plot(history_bp.history["val_loss"], label="Validation Loss")
-    ax3.set_xlabel("Epochs", fontsize=14)
-    ax3.set_ylabel("Loss", fontsize=14)
-    ax3.legend(frameon=False, fontsize=12)
-    fig3.tight_layout()
-    fig3.savefig(out_dir / "9_LOSS_ADDED.svg", format="svg", dpi=200)
-    plt.close(fig3)
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
 
-    fig4 = plt.figure(figsize=(5, 5))
-    ax4 = fig4.gca()
-    ax4.plot(history_bp.history["accuracy"], label="Training Accuracy")
-    ax4.plot(history_bp.history["val_accuracy"], label="Validation Accuracy")
-    ax4.set_xlabel("Epochs", fontsize=14)
-    ax4.set_ylabel("Accuracy", fontsize=14)
-    ax4.legend(frameon=False, fontsize=12)
-    fig4.tight_layout()
-    fig4.savefig(out_dir / "10_ACC_ADDED.svg", format="svg", dpi=200)
-    plt.close(fig4)
+    base_fpr = np.linspace(0, 1, 101)
+    tprs, fold_aucs = [], []
+    y_all, p_all = [], []
+
+    plt.figure(figsize=(5, 5))
+    ax = plt.gca()
+    ax.set_aspect("equal", "datalim")
+    linestyles = ["-", "--", "-.", ":", (0, (3, 5, 1, 5))]
+
+    X = np.asarray(feature)
+
+    for fold_idx, (train_index, test_index) in enumerate(skf.split(X, strata), start=1):
+        x_train, x_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+
+        model = model_fn()
+        model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=verbose)
+
+        y_prob = model.predict(x_test, verbose=0).ravel()
+        auc_fold = roc_auc_score(y_test, y_prob)
+        fold_aucs.append(auc_fold)
+        print(f"Fold {fold_idx} AUC: {auc_fold:.3f}")
+
+        fpr, tpr, _ = roc_curve(y_test, y_prob)
+        plt.plot(
+            fpr,
+            tpr,
+            color=color,
+            linestyle=linestyles[(fold_idx - 1) % len(linestyles)],
+            lw=0.8,
+            alpha=0.35,
+            label=f"Fold {fold_idx} (AUC = {auc_fold:.2f})",
+        )
+
+        tpr_interp = np.interp(base_fpr, fpr, tpr)
+        tpr_interp[0] = 0.0
+        tprs.append(tpr_interp)
+
+        y_all.append(y_test)
+        p_all.append(y_prob)
+
+        tf.keras.backend.clear_session()
+
+    fold_aucs = np.array(fold_aucs)
+    auc_mean = float(fold_aucs.mean())
+    auc_sd = float(fold_aucs.std(ddof=1))
+    print(f"\n{n_splits}-fold CV AUC mean ± SD: {auc_mean:.3f} ± {auc_sd:.3f}")
+
+    tprs = np.array(tprs)
+    mean_tprs = tprs.mean(axis=0)
+    std_tprs = tprs.std(axis=0)
+
+    tprs_upper = np.minimum(mean_tprs + std_tprs, 1)
+    tprs_lower = np.maximum(mean_tprs - std_tprs, 0)
+
+    plt.plot(base_fpr, mean_tprs, color, label=f"Mean ROC (AUC = {auc_mean:.2f} ± {auc_sd:.2f})", lw=2)
+    plt.fill_between(base_fpr, tprs_lower, tprs_upper, color=color, alpha=0.1)
+    plt.plot([0, 1], [0, 1], color="darkgrey", lw=1, linestyle="--")
+
+    plt.xlim([-0.01, 1.01])
+    plt.ylim([-0.01, 1.01])
+    plt.ylabel("Sensitivity", fontsize=16)
+    plt.xlabel("1 - Specificity", fontsize=16)
+    plt.legend(loc="lower right", frameon=False, fontsize=12)
+    plt.tight_layout()
+    plt.savefig(filename, format="svg")
+    plt.show()
+
+    return {
+        "fold_aucs": fold_aucs,
+        "auc_mean": auc_mean,
+        "auc_sd": auc_sd,
+        "y_oof": y_all,
+        "p_oof": p_all,
+        "base_fpr": base_fpr,
+        "mean_tprs": mean_tprs,
+    }
