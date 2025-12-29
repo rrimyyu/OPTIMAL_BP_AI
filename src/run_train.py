@@ -64,7 +64,7 @@ X_valid = X_valid_full.drop(columns=drop_cols)
 # =========================================================
 # Clinical-only model
 # =========================================================
-model_cln = create_deep_neural_network(X_train)
+model_cln = create_deep_neural_network(X_train.shape[1])
 model_cln.fit(
     X_train,
     y_train,
@@ -80,7 +80,7 @@ model_cln.save("clinical-only_model.h5")
 X_bp_train = X_train_full
 X_bp_valid = X_valid_full
 
-model_bp = create_deep_neural_network(X_bp_train)
+model_bp = create_deep_neural_network(X_bp_train.shape[1])
 model_bp.fit(
     X_bp_train,
     y_train,
@@ -189,6 +189,6 @@ dca_df_valid = visualize_dca_valid(
     y_valid,
     pt_min=0.05,
     pt_max=0.60,
-    n_pts=10,
+    n_pts=100,
     filename="DCA_VALID.svg",
 )

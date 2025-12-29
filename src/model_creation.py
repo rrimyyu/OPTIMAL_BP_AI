@@ -57,7 +57,10 @@ def create_deep_neural_network(
     model.compile(
         optimizer=optimizer,
         loss="binary_crossentropy",
-        metrics=["accuracy"],
+        metrics=[
+            "accuracy",
+            tf.keras.metrics.AUC(name="auc"),  
+        ],
     )
 
     return model
