@@ -1,4 +1,4 @@
-# 🧠 OPTIMAL-BP AI: Explainable AI for Blood Pressure Variability after Thrombectomy
+# 🧠 OPTIMAL-BP AI: Prediction of 3-Month Functional Outcomes Using SBP Metrics and Explainable AI
 
 ### 📖 Overview
 This repository contains the core scripts and workflow for the secondary analysis of the **OPTIMAL-BP randomized clinical trial (2020–2022, 19 centers, N = 306)**.  
@@ -10,9 +10,9 @@ The project investigates how different systolic blood pressure (SBP) control str
 ```mermaid
 graph TD
 A[Clinical & SBP Excel Sheets] --> B[Data Preprocessing]
-B --> C[Feature Engineering: TR, SD, CV, VIM]
-C --> D[Model Training: DNN, XGBoost, LightGBM, CatBoost]
-D --> E[Explainability: SHAP, Feature Importance]
+B --> C[Feature Engineering]
+C --> D[Model Training]
+D --> E[Explainability]
 E --> F[Group Comparison: Intensive vs Conventional]
 ```
 
@@ -26,7 +26,7 @@ E --> F[Group Comparison: Intensive vs Conventional]
 | **`tuning_models.py`** | Hyperparameter search using randomized grid or Bayesian optimization. |
 | **`run_train.py`** | Main training routine (model training, validation, and saving). |
 | **`run_train_call.py`** | Entry script for local execution (Python script or notebook). |
-| **`model_evaluation.py`** | Evaluate models with ROC, PR curves, and classification metrics. |
+| **`model_evaluation.py`** | Evaluate models with ROC curves and classification metrics. |
 | **`compare_auc_delong.py`** | Statistical comparison of AUCs using DeLong’s test. |
 | **`shap_analysis.py`** | Compute SHAP values for explainability and visualize feature importance. |
 | **`run_tune.py`** | Run hyperparameter tuning and save optimal configurations. |
@@ -39,7 +39,7 @@ E --> F[Group Comparison: Intensive vs Conventional]
 **Outcome:** 90-day mRS (0–2 = Good / 3–6 = Poor)  
 
 **SBP inputs used:**  
-`Systolic_enroll`, `systolic_overall_max`, `systolic_overall_min`, `systolic_overall_mean`  
+`SBP at enrollment`, `SBP overall maximum`, `SBP overall minimum`, `SBP overall mean`  
 
 **BPV features:**  
 - `TR` (Time-Rate of SBP change)  
@@ -53,8 +53,8 @@ E --> F[Group Comparison: Intensive vs Conventional]
 | Step | Method |
 |:--|:--|
 | **Feature scaling** | StandardScaler per group (Intensive / Conventional) |
-| **Models** | DNN, XGBoost, LightGBM, CatBoost |
-| **Loss / Metrics** | Binary cross-entropy, AUC-ROC, AUC-PR, Accuracy, Precision, Recall |
+| **Models** | DNN, Decision trees, Extra tree, Random forest, XGBoost, LightGBM, CatBoost |
+| **Loss / Metrics** | Binary cross-entropy, AUC-ROC, Accuracy, Precision, Recall |
 | **Explainability** | SHAP-based feature importance and dependence analysis |
 
 ---
@@ -81,9 +81,9 @@ OPTIMAL_BP_AI/
 ```
 
 *Note:*  
-The `figures/` and `results/` directories are **not uploaded to GitHub**,  
-but are automatically created when you run the training script.  
-All generated reports and model files are stored in `results/reports/` and `results/models/`.
+The `data/` and `results/` directories are **not included in the GitHub repository**.  
+However, the `results/` directory is automatically created when you run the training script.  
+All generated reports and model files will be saved under `results/reports/` and `results/models/`, respectively.
 
 ---
 

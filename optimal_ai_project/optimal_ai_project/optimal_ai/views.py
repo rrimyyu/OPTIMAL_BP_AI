@@ -11,50 +11,48 @@ import base64
 import joblib
 import pandas as pd
 import pickle
-from ._SHAP import find_explainer
+from .shap import find_explainer
 import os
 
-new_columns = [
-    'pt_age', 'pt_sex', 'HiBP', 'Hyperlipidemia', 'Smoking',
-    'Previous_stroke_existence', 'CAOD합친것', 'cancer_active',
-    'CHF_onoff', 'PAOD_existence', 'NIHSS_IAT_just_before',
-    'Onset_to_registration_min', 'IV_tPA', 'Systolic_enroll',
-    'DM', 'A_fib합친것', 'Antiplatelet', 'Anticoagulant',
-    'Hgb', 'WBC', 'BMI', 'Group', 'systolic_max', 'systolic_min',
-    'systolic_mean', 'systolic_TR', 'systolic_SD', 'systolic_CV',
-    'systolic_VIM']
+selected_cols = [
+    'NIHSS_IAT_just_before', 'Group', 'Hyperlipidemia',
+    'Previous_stroke_existence', 'pt_age', 'DM',
+    'Anticoagulant', 'Hgb', 'systolic_TR', 'systolic_min']
 
 # Disable CUDA for TensorFlow
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 # Load Scaler Objects
-scalers_cs = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_cs.pkl")
-scalers_is = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_is.pkl")
+scalers_conv = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/model/conventional-group_scaler.pkl")
+scalers_int = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/model/intensive-group_scaler.pkl")
 
-def prepare_input_features(collected_data):
+def prepare_input_features(collected_data, keep_cols):
     group = collected_data.get("Group")
-
     if group == 0.0:
-        scaler = scalers_cs
-        if scaler is None:
-            raise ValueError("Scaler for group 0 not found")
+        scaler = scalers_conv
     elif group == 1.0:
-        scaler = scalers_is
-        if scaler is None:
-            raise ValueError("Scaler for group 1 not found")
+        scaler = scalers_int
     else:
         raise ValueError("Invalid group value")
 
     df = pd.DataFrame([collected_data])
 
-    for cols, scaler_instance in scaler.items():
-        cols_list = list(cols)
-        df[cols_list] = scaler_instance.transform(df[cols_list])
+    missing = [c for c in keep_cols if c not in df.columns]
+    if missing:
+        raise KeyError(f"Missing columns in input data: {missing}")
 
-    scaled_features = df
+    df = df[keep_cols].copy()
 
-    return scaled_features
+    for c in keep_cols:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    if df.isna().any().any():
+        bad = df.columns[df.isna().iloc[0]].tolist()
+        raise ValueError(f"Non-numeric or missing after conversion: {bad}")
+
+    X_scaled = scaler.transform(df.values).astype(np.float32)  # (1, 10)
+
+    return pd.DataFrame(X_scaled, columns=keep_cols)
 
 def optimal_ai_view(request):
     result = None
@@ -67,11 +65,10 @@ def optimal_ai_view(request):
         if form.is_valid():
             collected_data = form.cleaned_data
 
-            scaled_features = prepare_input_features(collected_data)
-            scaled_features = scaled_features[new_columns]
+            scaled_features = prepare_input_features(collected_data, selected_cols)
             input_features = scaled_features.to_numpy().reshape(1, -1)
 
-            model = tf.keras.models.load_model("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/cln_sbp_model.h5")
+            model = tf.keras.models.load_model("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/model/model.h5")
             prediction = model.predict(input_features)
             result_prob = int(round(prediction[0][0] * 100, 2))
 
@@ -84,14 +81,12 @@ def optimal_ai_view(request):
             shap_values = np.squeeze(shap_values)
             shap_values_with_cols = pd.DataFrame(shap_values)
             shap_values_with_cols = shap_values_with_cols.transpose()
-            shap_values_with_cols.columns = new_columns
+            shap_values_with_cols.columns = selected_cols
 
-            feature_names = ['Age', 'Sex', 'Hypertension', 'Hyperlipidemia', 'Smoking', 'Previous stroke',
-                             'CAOD', 'Active cancer', 'Congestive heart failure', 'PAOD', 'NIHSS score',
-                             'Onset to registration', 'IV tPA', 'SBP enroll', 'DM', 'Atrial fibrillation',
-                             'Antiplatelet', 'Anticoagulant', 'Hemoglobin', 'White blood cell', 'Body mass index',
-                             'Group', 'SBP max', 'SBP min', 'SBP mean', 'SBP time rate', 'SBP standard deviation',
-                             'SBP coefficient of variation', 'SBP variation independent of the mean']
+            feature_names = [
+                'NIHSS score', 'Group', 'Hyperlipidemia', 'Previous stroke',
+                'Age', 'DM', 'Anticoagulant', 'Hemoglobin', 'SBP time rate', 'SBP min'
+            ]
 
             insights = extract_shap_insights(np.transpose(shap_values), feature_names, top_n=3)
 
