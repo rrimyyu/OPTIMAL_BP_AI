@@ -11,18 +11,8 @@ import base64
 import joblib
 import pandas as pd
 import pickle
-from ._SHAP import find_explainer
+from .shap import find_explainer
 import os
-
-# new_columns = [
-#     'pt_age', 'pt_sex', 'HiBP', 'Hyperlipidemia', 'Smoking',
-#     'Previous_stroke_existence', 'CAOD합친것', 'cancer_active',
-#     'CHF_onoff', 'PAOD_existence', 'NIHSS_IAT_just_before',
-#     'Onset_to_registration_min', 'IV_tPA', 'Systolic_enroll',
-#     'DM', 'A_fib합친것', 'Antiplatelet', 'Anticoagulant',
-#     'Hgb', 'WBC', 'BMI', 'Group', 'systolic_max', 'systolic_min',
-#     'systolic_mean', 'systolic_TR', 'systolic_SD', 'systolic_CV',
-#     'systolic_VIM']
 
 selected_cols = [
     'NIHSS_IAT_just_before', 'Group', 'Hyperlipidemia',
@@ -34,36 +24,32 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 # Load Scaler Objects
-scalers_cs = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_cs_10.pkl")
-scalers_is = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/scaler_is_10.pkl")
+scalers_conv = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/model/conventional-group_scaler.pkl")
+scalers_int = joblib.load("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/model/intensive-group_scaler.pkl")
 
 def prepare_input_features(collected_data, keep_cols):
     group = collected_data.get("Group")
     if group == 0.0:
-        scaler = scalers_cs
+        scaler = scalers_conv
     elif group == 1.0:
-        scaler = scalers_is
+        scaler = scalers_int
     else:
         raise ValueError("Invalid group value")
 
     df = pd.DataFrame([collected_data])
 
-    # ✅ 필요한 10개가 다 있는지 확인
     missing = [c for c in keep_cols if c not in df.columns]
     if missing:
         raise KeyError(f"Missing columns in input data: {missing}")
 
-    # ✅ 컬럼 순서 고정 (모델 학습 순서 그대로)
     df = df[keep_cols].copy()
 
-    # ✅ 숫자 변환 (라디오값/문자 들어오는 경우 방지)
     for c in keep_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     if df.isna().any().any():
         bad = df.columns[df.isna().iloc[0]].tolist()
         raise ValueError(f"Non-numeric or missing after conversion: {bad}")
 
-    # ✅ 10개 전체를 한 번에 scaling
     X_scaled = scaler.transform(df.values).astype(np.float32)  # (1, 10)
 
     return pd.DataFrame(X_scaled, columns=keep_cols)
@@ -82,7 +68,7 @@ def optimal_ai_view(request):
             scaled_features = prepare_input_features(collected_data, selected_cols)
             input_features = scaled_features.to_numpy().reshape(1, -1)
 
-            model = tf.keras.models.load_model("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/TRAINED_MODEL/cln_sbp_model.h5")
+            model = tf.keras.models.load_model("/home/ec2-user/OPTIMAL_BP_AI/optimal_ai_project/optimal_ai_project/model/model.h5")
             prediction = model.predict(input_features)
             result_prob = int(round(prediction[0][0] * 100, 2))
 
@@ -96,13 +82,6 @@ def optimal_ai_view(request):
             shap_values_with_cols = pd.DataFrame(shap_values)
             shap_values_with_cols = shap_values_with_cols.transpose()
             shap_values_with_cols.columns = selected_cols
-
-            # feature_names = ['Age', 'Sex', 'Hypertension', 'Hyperlipidemia', 'Smoking', 'Previous stroke',
-            #                  'CAOD', 'Active cancer', 'Congestive heart failure', 'PAOD', 'NIHSS score',
-            #                  'Onset to registration', 'IV tPA', 'SBP enroll', 'DM', 'Atrial fibrillation',
-            #                  'Antiplatelet', 'Anticoagulant', 'Hemoglobin', 'White blood cell', 'Body mass index',
-            #                  'Group', 'SBP max', 'SBP min', 'SBP mean', 'SBP time rate', 'SBP standard deviation',
-            #                  'SBP coefficient of variation', 'SBP variation independent of the mean']
 
             feature_names = [
                 'NIHSS score', 'Group', 'Hyperlipidemia', 'Previous stroke',
