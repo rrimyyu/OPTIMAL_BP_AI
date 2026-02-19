@@ -55,25 +55,42 @@ def param_distributions_tree(seed: int = 42) -> Dict[str, List[Any]]:
     return {
         "max_depth": [None, 3, 4, 5, 6, 8, 10, 12],
         "min_samples_split": [2, 4, 6, 8, 12, 16, 20],
-        "min_samples_leaf": [1, 2, 4, 6, 8, 12, 16],
+        "min_samples_leaf": [1, 2, 4, 6, 8, 12, 16, 18],
         "class_weight": [None, "balanced"],
+        "criterion": ["gini"],
     }
+
+
+def param_distributions_extra_tree(seed: int = 42) -> Dict[str, List[Any]]:
+    return {
+        "max_depth": [None, 3, 4, 5, 6, 8, 10, 12],
+        "min_samples_split": [2, 4, 6, 8, 12, 16, 20],
+        "min_samples_leaf": [1, 2, 4, 6, 8, 12, 16, 18],
+        "class_weight": [None, "balanced"],
+        "criterion": ["gini"],
+        "max_features": ["sqrt"],
+        "splitter": ["random"],
+    }
+
 
 def param_distributions_rf(seed: int = 42) -> Dict[str, List[Any]]:
     return {
-        "n_estimators": [100, 200, 300, 500],
+        "n_estimators": [10, 100, 200, 300, 500],
         "max_depth": [None, 4, 6, 8, 10, 12],
         "min_samples_split": [2, 4, 6, 8, 12],
-        "min_samples_leaf": [1, 2, 4, 6, 8],
+        "min_samples_leaf": [1, 2, 4, 6, 8, 12],
         "max_features": ["sqrt", "log2", None],
         "class_weight": [None, "balanced"],
+        "bootstrap": [True],
+        "criterion": ["gini"],
     }
+
 
 def param_distributions_xgb(seed: int = 42) -> Dict[str, List[Any]]:
     return {
         "n_estimators": [200, 400, 800],
         "learning_rate": [0.01, 0.03, 0.05, 0.1],
-        "max_depth": [3, 4, 5, 6, 8],
+        "max_depth": [3, 4, 5, 6, 8, 10],
         "subsample": [0.7, 0.8, 0.9, 1.0],
         "colsample_bytree": [0.6, 0.7, 0.8, 1.0],
         "reg_lambda": [0.0, 0.5, 1.0, 2.0, 5.0],
@@ -81,9 +98,10 @@ def param_distributions_xgb(seed: int = 42) -> Dict[str, List[Any]]:
         "gamma": [0.0, 0.1, 0.3],
     }
 
+
 def param_distributions_lgbm(seed: int = 42) -> Dict[str, List[Any]]:
     return {
-        "n_estimators": [300, 600, 1000],
+        "n_estimators": [100, 300, 600, 1000],
         "learning_rate": [0.01, 0.03, 0.05, 0.1],
         "max_depth": [-1, 4, 6, 8, 10],
         "num_leaves": [15, 31, 63, 127],
@@ -94,13 +112,17 @@ def param_distributions_lgbm(seed: int = 42) -> Dict[str, List[Any]]:
         "min_child_samples": [5, 10, 20, 30],
     }
 
+
 def param_distributions_cat(seed: int = 42) -> Dict[str, List[Any]]:
     return {
         "iterations": [300, 600, 1000],
         "learning_rate": [0.01, 0.03, 0.05, 0.1],
-        "depth": [4, 6, 8, 10],
+        "depth": [4, 6, 8, 10, 12],
         "l2_leaf_reg": [1.0, 3.0, 5.0, 7.0],
         "border_count": [32, 64, 128],
+        "subsample": [0.8, 1.0],
+        "grow_policy": ["SymmetricTree"],
+        "leaf_estimation_method": ["Newton"],
     }
 
 
@@ -143,7 +165,7 @@ def tune_decision_tree(X, y, seed=42, n_iter=30, n_splits=5):
 
 def tune_extra_tree(X, y, seed=42, n_iter=30, n_splits=5):
     est = ExtraTreeClassifier(random_state=seed)
-    return _fit_random_search(est, param_distributions_tree(seed), X, y, seed, n_iter, n_splits)
+    return _fit_random_search(est, param_distributions_extra_tree(seed), X, y, seed, n_iter, n_splits)
 
 def tune_random_forest(X, y, seed=42, n_iter=40, n_splits=5):
     est = RandomForestClassifier(random_state=seed, n_jobs=-1)
@@ -177,91 +199,6 @@ def tune_catboost(X, y, seed=42, n_iter=40, n_splits=5):
         thread_count=-1,
     )
     return _fit_random_search(est, param_distributions_cat(seed), X, y, seed, n_iter, n_splits)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Keras DNN tuning (compact loop-based search)
-# ──────────────────────────────────────────────────────────────────────────────
-
-def tune_keras_dnn(
-    X_train: pd.DataFrame,
-    y_train: pd.Series,
-    X_valid: pd.DataFrame,
-    y_valid: pd.Series,
-    seed: int = 42,
-    search_space: Optional[Dict[str, List[Any]]] = None,
-    epochs: int = 100,
-    batch_size: int = 64,
-    class_weight: Optional[Dict[int, float]] = None,
-    out_dir: Optional[Path] = None,
-) -> Tuple[Any, Dict[str, Any], float]:
-    """
-    Simple manual search for DNN hyperparameters.
-    Returns: (best_model, best_params, best_auc_valid)
-    """
-    import tensorflow as tf
-
-    if search_space is None:
-        search_space = {
-            "hidden_units": [(64, 32, 16), (128, 64, 32), (64, 64, 32)],
-            "dropout": [0.0, 0.2, 0.3],
-            "l2": [1e-4, 5e-4, 1e-3],
-            "learning_rate": [1e-3, 3e-4],
-            "use_batchnorm": [True, False],
-        }
-
-    set_seed(seed)
-    best_score = -np.inf
-    best_model = None
-    best_params: Dict[str, Any] = {}
-
-    combos = [
-        (hu, dr, l2, lr, bn)
-        for hu in search_space["hidden_units"]
-        for dr in search_space["dropout"]
-        for l2 in search_space["l2"]
-        for lr in search_space["learning_rate"]
-        for bn in search_space["use_batchnorm"]
-    ]
-
-    for (hidden_units, dropout, l2, lr, use_batchnorm) in combos:
-        params = dict(
-            hidden_units=hidden_units,
-            dropout=dropout,
-            l2=l2,
-            learning_rate=lr,
-            use_batchnorm=use_batchnorm,
-            seed=seed,
-        )
-        model = create_deep_neural_network(
-            X_train,
-            hidden_units=hidden_units,
-            dropout=dropout,
-            l2=l2,
-            learning_rate=lr,
-            use_batchnorm=use_batchnorm,
-            seed=seed,
-        )
-        history = model.fit(
-            X_train, y_train,
-            validation_data=(X_valid, y_valid),
-            epochs=min(epochs, 120),
-            batch_size=batch_size,
-            callbacks=default_callbacks(str(out_dir or Path("results/models"))),
-            class_weight=class_weight,
-            verbose=0
-        )
-
-        # Evaluate on validation using ROC-AUC
-        y_prob = model.predict(X_valid, verbose=0).ravel()
-        auc_valid = roc_auc_score(y_valid, y_prob)
-
-        if auc_valid > best_score:
-            best_score = auc_valid
-            best_model = model
-            best_params = params
-
-    return best_model, best_params, float(best_score)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -326,23 +263,6 @@ def tune_all_models(
     dump(s.best_estimator_, models_dir / "best_catboost.joblib")
     save_json({"best_params": s.best_params_, "best_auc_cv": float(s.best_score_)}, reports_dir / "catboost.json")
     summary["CatBoost"] = {"auc_cv": float(s.best_score_), "params": s.best_params_, "model": str(models_dir / "best_catboost.joblib")}
-
-    # DNN (optional)
-    if include_dnn and X_valid is not None and y_valid is not None:
-        best_model, best_params, best_auc = tune_keras_dnn(
-            X_train, y_train, X_valid, y_valid,
-            seed=seed, epochs=dnn_epochs, batch_size=dnn_batch_size,
-            class_weight=class_weight, out_dir=models_dir
-        )
-        # Save model and params
-        best_model_path = models_dir / "best_binary_dnn.keras"
-        best_model.save(best_model_path)
-        save_json({"best_params": best_params, "best_auc_valid": best_auc}, reports_dir / "keras_dnn.json")
-        summary["KerasDNN"] = {
-            "auc_valid": best_auc,
-            "params": best_params,
-            "model": str(best_model_path),
-        }
 
     # Global summary
     save_json(summary, reports_dir / "summary.json")
